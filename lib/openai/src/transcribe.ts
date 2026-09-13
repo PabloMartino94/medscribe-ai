@@ -19,14 +19,19 @@ const DOMAIN_HINT =
   "Consulta médica en español. Términos clínicos, nombres de fármacos, dosis y cifras de signos vitales.";
 
 /**
- * The transcription model takes its behaviour from config, not from prose:
- * asking it in the prompt to label speakers was simply ignored. Kept short and
- * purely about vocabulary.
+ * The dedicated transcription model ignores this request for labels — it takes
+ * its behaviour from config. A general-purpose model does follow instructions,
+ * so the ask is kept here: harmless to the one that ignores it, and the whole
+ * point for the one that might obey. Which model runs is AI_TRANSCRIBE_MODEL.
  */
 const GEMINI_INSTRUCTION =
-  `Transcribí el audio palabra por palabra, en su idioma original. ${DOMAIN_HINT} ` +
-  "Devolvé únicamente la transcripción, sin comentarios, sin encabezados y sin comillas. " +
-  "Si el audio no contiene habla, devolvé una cadena vacía.";
+  `Transcribí el audio palabra por palabra, en su idioma original. ${DOMAIN_HINT}\n` +
+  "Es la grabación de una consulta médica. Si distinguís más de una voz, escribí una " +
+  'línea por intervención con el prefijo "Médico:", "Paciente:" o "Acompañante:", ' +
+  "según la voz que la haya dicho.\n" +
+  "No resumas, no interpretes, no corrijas y no agregues nada: esto es una transcripción. " +
+  "Si el audio no contiene habla, devolvé una cadena vacía y nada más.\n" +
+  "Devolvé únicamente la transcripción, sin comentarios, sin encabezados y sin comillas.";
 
 /** Deadlines. Without them a stalled provider call hangs the upload forever. */
 const TRANSCRIBE_TIMEOUT_MS = 180_000;
