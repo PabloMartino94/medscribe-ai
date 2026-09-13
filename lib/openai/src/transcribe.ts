@@ -18,8 +18,22 @@ export type TranscribableFormat = "wav" | "mp3";
 const DOMAIN_HINT =
   "Consulta médica en español. Términos clínicos, nombres de fármacos, dosis y cifras de signos vitales.";
 
+/**
+ * Asks for speaker-labelled turns, not just words.
+ *
+ * In a recorded consultation it matters enormously who said what: a patient's
+ * guess is part of the history, while the same sentence from the physician is
+ * an assessment. Without labels the structuring step cannot tell them apart.
+ * Only the Gemini path does this — OpenAI's transcription models do not
+ * separate speakers.
+ */
 const GEMINI_INSTRUCTION =
-  `Transcribí el audio palabra por palabra, en su idioma original. ${DOMAIN_HINT} ` +
+  `Transcribí el audio palabra por palabra, en su idioma original. ${DOMAIN_HINT}\n` +
+  "Es la grabación de una consulta médica. Identificá quién habla y escribí una línea " +
+  'por intervención, con el prefijo "Médico:", "Paciente:" o "Acompañante:". ' +
+  'Si no se puede determinar quién habla en una intervención, usá "Hablante:". ' +
+  "Si habla una sola persona (un dictado), igual usá el prefijo que corresponda.\n" +
+  "No resumas, no interpretes y no corrijas lo que se dice: esto es una transcripción.\n" +
   "Devolvé únicamente la transcripción, sin comentarios, sin encabezados y sin comillas. " +
   "Si el audio no contiene habla, devolvé una cadena vacía.";
 

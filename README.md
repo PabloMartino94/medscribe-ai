@@ -34,6 +34,24 @@ supabase/
 - **Auth**: Supabase Auth con email y contraseña. Toda la app está detrás del
   login; no hay modo anónimo.
 
+## Grabación de la consulta
+
+La entrada puede ser un dictado del profesional o la grabación de la consulta
+entera. Para el segundo caso, la transcripción pide turnos etiquetados
+("Médico:", "Paciente:", "Acompañante:") y el prompt de estructuración usa esa
+atribución: lo que relata el paciente va a la anamnesis como referido, y solo
+lo que afirma el médico puede volverse hallazgo, diagnóstico o indicación. Sin
+eso, un "para mí es la vesícula" del paciente termina escrito como impresión
+diagnóstica.
+
+Dos límites que conviene tener presentes:
+
+- **El examen físico es mudo.** Lo que no se verbaliza no llega al modelo. El
+  prompt le prohíbe inferir hallazgos o signos vitales que no se dijeron, así
+  que las secciones van a quedar incompletas si no se dictan en voz alta.
+- La separación de hablantes la hace Gemini; los modelos de transcripción de
+  OpenAI no distinguen interlocutores.
+
 ## Privacidad y seguridad
 
 Esta app guarda datos de salud, así que el aislamiento entre profesionales no
@@ -59,6 +77,9 @@ depende del código de aplicación:
   use el contenido para mejorar sus productos, cosa que el tier pago y la API
   de OpenAI no hacen.
 - Borrar una consulta borra también su grabación.
+- **Grabar al paciente requiere su consentimiento.** La app todavía no lo pide
+  ni lo deja asentado; en Argentina son datos sensibles de salud (leyes 25.326
+  y 26.529). Pendiente.
 
 ## Desarrollo local
 
