@@ -1,29 +1,64 @@
 import OpenAI from "openai";
 
-const apiKey = process.env["OPENAI_API_KEY"];
+/**
+ * Which API the key belongs to.
+ *
+ * Gemini exposes an OpenAI-compatible surface, so one client and one set of
+ * call sites serve both. The compatibility is not total — it covers
+ * `/chat/completions` but not `/audio/transcriptions` — which is why
+ * transcription branches on this value; structuring does not need to.
+ */
+export type AiProvider = "openai" | "gemini";
+
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+
+const DEFAULT_MODELS: Record<AiProvider, { transcribe: string; structure: string }> = {
+  // Cheapest OpenAI models that still produce reliable Spanish clinical prose
+  // and strict JSON.
+  openai: { transcribe: "gpt-4o-mini-transcribe", structure: "gpt-4o" },
+  // Gemini has no dedicated speech-to-text model; the same multimodal model
+  // handles audio input and structuring.
+  gemini: { transcribe: "gemini-2.5-flash", structure: "gemini-2.5-flash" },
+};
+
+const rawProvider = (process.env["AI_PROVIDER"] ?? "openai").trim().toLowerCase();
+
+if (rawProvider !== "openai" && rawProvider !== "gemini") {
+  throw new Error(`AI_PROVIDER must be "openai" or "gemini", got "${rawProvider}".`);
+}
+
+export const PROVIDER: AiProvider = rawProvider;
+
+const apiKey = process.env["AI_API_KEY"] || process.env["OPENAI_API_KEY"];
 
 if (!apiKey) {
   throw new Error(
-    "OPENAI_API_KEY must be set. Create a key at https://platform.openai.com/api-keys " +
-      "and add it to the environment (see .env.example).",
+    PROVIDER === "gemini"
+      ? "AI_API_KEY must be set to a Gemini API key (https://aistudio.google.com/apikey). See .env.example."
+      : "AI_API_KEY must be set to an OpenAI API key (https://platform.openai.com/api-keys). See .env.example.",
   );
 }
 
-// `OPENAI_BASE_URL` lets the app run against an OpenAI-compatible gateway
-// (Azure OpenAI, OpenRouter, a self-hosted proxy) without code changes.
-const baseURL = process.env["OPENAI_BASE_URL"];
+// An explicit base URL wins, so the app can also run against any other
+// OpenAI-compatible gateway without a code change.
+const baseURL =
+  process.env["AI_BASE_URL"] ||
+  process.env["OPENAI_BASE_URL"] ||
+  (PROVIDER === "gemini" ? GEMINI_BASE_URL : undefined);
 
 export const openai = new OpenAI({
   apiKey,
   ...(baseURL ? { baseURL } : {}),
 });
 
-/**
- * Models are env-configurable so the deployment can be re-pointed without a
- * rebuild. The defaults are the cheapest models that still produce reliable
- * Spanish clinical prose and strict JSON.
- */
+/** Models are env-configurable so a deployment can be re-pointed without a rebuild. */
 export const MODELS = {
-  transcribe: process.env["OPENAI_TRANSCRIBE_MODEL"] || "gpt-4o-mini-transcribe",
-  structure: process.env["OPENAI_STRUCTURE_MODEL"] || "gpt-4o",
+  transcribe:
+    process.env["AI_TRANSCRIBE_MODEL"] ||
+    process.env["OPENAI_TRANSCRIBE_MODEL"] ||
+    DEFAULT_MODELS[PROVIDER].transcribe,
+  structure:
+    process.env["AI_STRUCTURE_MODEL"] ||
+    process.env["OPENAI_STRUCTURE_MODEL"] ||
+    DEFAULT_MODELS[PROVIDER].structure,
 } as const;

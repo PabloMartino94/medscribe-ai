@@ -22,13 +22,13 @@ services:
       - key: LOG_LEVEL
         value: info
 
-      # OpenAI — transcription and note structuring.
-      - key: OPENAI_API_KEY
+      # Transcription and note structuring. AI_PROVIDER picks which API the
+      # key belongs to: "openai" or "gemini". The model defaults follow the
+      # provider, so switching is a two-field change with no redeploy of code.
+      - key: AI_PROVIDER
+        value: gemini
+      - key: AI_API_KEY
         sync: false
-      - key: OPENAI_TRANSCRIBE_MODEL
-        value: gpt-4o-mini-transcribe
-      - key: OPENAI_STRUCTURE_MODEL
-        value: gpt-4o
 
       # Supabase — authentication, consultation storage, audio bucket.
       # The publishable key is safe to expose: it is served to the browser by

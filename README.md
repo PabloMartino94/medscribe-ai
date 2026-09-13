@@ -19,13 +19,16 @@ lib/
   api-spec/         contrato OpenAPI + configuración de orval
   api-zod/          esquemas Zod generados (validación del servidor)
   api-client-react/ hooks de TanStack Query generados (cliente)
-  openai/           cliente de OpenAI y utilidades de audio (ffmpeg)
+  openai/           cliente de IA (OpenAI/Gemini) y utilidades de audio (ffmpeg)
 supabase/
   migrations/   esquema, RLS y bucket de audio
 ```
 
-- **IA**: `gpt-4o-mini-transcribe` para voz a texto, `gpt-4o` con salida JSON
-  para estructurar. Ambos configurables por variable de entorno.
+- **IA**: OpenAI o Gemini, según `AI_PROVIDER`. Gemini expone una API
+  compatible con OpenAI, así que un solo cliente sirve para los dos; la
+  compatibilidad no llega a `/audio/transcriptions`, por eso la transcripción
+  manda el audio como `input_audio` dentro de `/chat/completions` cuando el
+  proveedor es Gemini. Los modelos son configurables.
 - **Datos**: Supabase Postgres (consultas, preferencias) y Supabase Storage
   (grabaciones, bucket privado).
 - **Auth**: Supabase Auth con email y contraseña. Toda la app está detrás del
@@ -50,6 +53,11 @@ depende del código de aplicación:
   sustituto de revisar el texto.
 - El audio no toca el disco del servidor: vive en memoria durante el pedido y
   va directo al bucket, o se descarta.
+- **El audio sí llega completo al proveedor de IA**, y el anonimizador no puede
+  hacer nada con él: los nombres se escuchan. Tenelo en cuenta al elegir
+  proveedor y plan — el tier gratuito de la API de Gemini permite que Google
+  use el contenido para mejorar sus productos, cosa que el tier pago y la API
+  de OpenAI no hacen.
 - Borrar una consulta borra también su grabación.
 
 ## Desarrollo local
@@ -58,7 +66,7 @@ Requisitos: Node 22+, pnpm 10, `ffmpeg` en el PATH.
 
 ```bash
 pnpm install
-cp .env.example .env      # completá OPENAI_API_KEY y las claves de Supabase
+cp .env.example .env      # completá AI_API_KEY y las claves de Supabase
 pnpm dev                  # API en :8080, frontend en :5173 con proxy a /api
 ```
 
@@ -103,13 +111,16 @@ Variables de entorno a cargar en Render (las secretas están marcadas
 
 | Variable | Para qué |
 | --- | --- |
-| `OPENAI_API_KEY` | Transcripción y estructuración |
+| `AI_PROVIDER` | `openai` o `gemini` |
+| `AI_API_KEY` | Clave del proveedor elegido |
 | `SUPABASE_URL` | URL del proyecto |
 | `SUPABASE_PUBLISHABLE_KEY` | Clave publishable (anon); se expone al navegador vía `/api/config` |
 
-Opcionales: `OPENAI_BASE_URL`, `OPENAI_TRANSCRIBE_MODEL`,
-`OPENAI_STRUCTURE_MODEL`, `CORS_ORIGINS`, `LOG_LEVEL`, `STATIC_DIR`,
-`FFMPEG_PATH`.
+Opcionales: `AI_BASE_URL`, `AI_TRANSCRIBE_MODEL`, `AI_STRUCTURE_MODEL`,
+`CORS_ORIGINS`, `LOG_LEVEL`, `STATIC_DIR`, `FFMPEG_PATH`.
+
+Modelos por defecto: con `openai`, `gpt-4o-mini-transcribe` y `gpt-4o`; con
+`gemini`, `gemini-2.5-flash` para ambas cosas.
 
 El health check apunta a `/api/healthz`.
 

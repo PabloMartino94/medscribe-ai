@@ -1,13 +1,13 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
-import { toFile } from "openai";
 import { TranscribeAudioResponse } from "@workspace/api-zod";
-import { openai, MODELS } from "@workspace/openai";
 import {
   convertToWav,
   detectAudioFormat,
+  transcribeAudio,
   wavDurationSeconds,
-} from "@workspace/openai/audio";
+  type TranscribableFormat,
+} from "@workspace/openai";
 import { randomUUID } from "node:crypto";
 import { authed, requireAuth } from "../middlewares/auth";
 import { RECORDINGS_BUCKET } from "../lib/supabase";
@@ -69,7 +69,7 @@ router.post(
     }
 
     let buffer: Buffer;
-    let ext: string;
+    let ext: TranscribableFormat;
     if (detected === "mp3") {
       buffer = file.buffer;
       ext = "mp3";
@@ -91,18 +91,7 @@ router.post(
 
     const durationSeconds = ext === "wav" ? wavDurationSeconds(buffer) : 0;
 
-    const prompt =
-      "Consulta médica en español. Términos clínicos, nombres de fármacos, dosis y cifras de signos vitales.";
-    const transcription = await openai.audio.transcriptions.create({
-      file: await toFile(buffer, `audio.${ext}`),
-      model: MODELS.transcribe,
-      language,
-      prompt,
-    });
-
-    let text = transcription.text.trim();
-    // On silence the model sometimes echoes the prompt back; treat that as no speech.
-    if (text === prompt) text = "";
+    const text = await transcribeAudio(buffer, ext, language);
 
     res.json(TranscribeAudioResponse.parse({ text, durationSeconds, audioPath }));
   },
