@@ -49,8 +49,15 @@ Dos límites que conviene tener presentes:
 - **El examen físico es mudo.** Lo que no se verbaliza no llega al modelo. El
   prompt le prohíbe inferir hallazgos o signos vitales que no se dijeron, así
   que las secciones van a quedar incompletas si no se dictan en voz alta.
-- La separación de hablantes la hace Gemini; los modelos de transcripción de
-  OpenAI no distinguen interlocutores.
+- **Las etiquetas de hablante son deducidas, no oídas.** La transcripción
+  vuelve sin separar voces, así que un segundo paso asigna cada intervención
+  por contenido ("respirá profundo" es el médico). Acierta casi siempre en una
+  consulta, pero puede equivocarse: conviene revisar Subjetivo antes de dar la
+  nota por buena.
+- La separación acústica real existe en el endpoint `/v1beta/interactions` de
+  Gemini, pero su respuesta es un trabajo asincrónico (`status`, `steps`) que
+  hay que ir consultando hasta que termine. Intentarlo como una sola llamada
+  colgaba el pedido. Queda pendiente.
 
 ## Privacidad y seguridad
 

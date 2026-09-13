@@ -47,6 +47,9 @@ type ChatMessage = { role: "system" | "user"; content: string };
 
 const MAX_PREFERENCES = 30;
 
+/** Deadline for a structuring call. */
+const STRUCTURE_TIMEOUT_MS = 120_000;
+
 function stripMarkdown(s: string): string {
   return s
     .replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?/g, ""))
@@ -163,12 +166,16 @@ async function callModel(
   template: TemplateDef,
 ): Promise<{ output: ModelOutput | null; failure?: ParseFailure }> {
   const completion = await openai.chat.completions
-    .create({
-      model: MODELS.structure,
-      max_completion_tokens: 16384,
-      response_format: { type: "json_schema", json_schema: noteSchemaFor(template) },
-      messages,
-    })
+    .create(
+      {
+        model: MODELS.structure,
+        max_completion_tokens: 16384,
+        response_format: { type: "json_schema", json_schema: noteSchemaFor(template) },
+        messages,
+      },
+      // Without a deadline a stalled provider leaves the button spinning forever.
+      { timeout: STRUCTURE_TIMEOUT_MS },
+    )
     .catch((err: unknown) => {
       // Surfaces as a 502 with a message naming the likely cause, instead of
       // the provider's own status leaking out as ours.
@@ -225,6 +232,7 @@ function buildNote(template: TemplateDef, output: ModelOutput, anonymized: boole
 }
 
 const INVALID_MODEL_OUTPUT = "La IA devolvió una respuesta inválida. Intentá nuevamente.";
+
 
 router.post("/notes/structure", requireAuth, async (req, res) => {
   const parsed = StructureNoteBody.safeParse(req.body);
