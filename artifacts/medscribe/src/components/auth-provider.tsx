@@ -25,6 +25,9 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Refresh this long before expiry, so a request never races the deadline. */
+const TOKEN_REFRESH_MARGIN_MS = 60_000;
+
 /**
  * Translates the errors Supabase Auth returns into the Spanish the rest of the
  * UI speaks. Anything unmapped falls through with its original message.
@@ -60,7 +63,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setAuthTokenGetter(async () => {
       const { data } = await supabase.auth.getSession();
-      return data.session?.access_token ?? null;
+      const current = data.session;
+      if (!current) return null;
+
+      // Auto-refresh runs on a timer, which does not fire while the tab is
+      // asleep. Coming back to a laptop that was closed, the first request
+      // would otherwise carry a dead token and come back 401, which the app
+      // has no way to retry. Refresh when the token is spent or nearly so.
+      const expiresAt = current.expires_at;
+      const stale = expiresAt !== undefined && expiresAt * 1000 - Date.now() < TOKEN_REFRESH_MARGIN_MS;
+      if (!stale) return current.access_token;
+
+      const { data: refreshed, error } = await supabase.auth.refreshSession();
+      if (error || !refreshed.session) {
+        // The refresh token is gone too; sending the dead one would only
+        // produce a confusing 401, so let the caller see "no session".
+        return null;
+      }
+      return refreshed.session.access_token;
     });
     return () => setAuthTokenGetter(null);
   }, [supabase]);
