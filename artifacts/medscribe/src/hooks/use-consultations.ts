@@ -15,13 +15,13 @@ import {
  * Every mutation invalidates the list so the sidebar and the open note stay in
  * step without each caller having to remember to refetch.
  */
-export function useConsultations(enabled: boolean) {
+export function useConsultations() {
   const queryClient = useQueryClient();
   const listKey = getListConsultationsQueryKey();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: listKey });
 
-  const query = useListConsultations(undefined, { query: { enabled } });
+  const query = useListConsultations();
 
   const create = useCreateConsultation({ mutation: { onSuccess: invalidate } });
   const update = useUpdateConsultation({ mutation: { onSuccess: invalidate } });

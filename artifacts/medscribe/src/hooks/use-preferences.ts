@@ -10,11 +10,11 @@ import {
  * Standing style preferences, stored on the physician's profile so they follow
  * them across devices instead of living in one browser's localStorage.
  */
-export function usePreferences(enabled: boolean) {
+export function usePreferences() {
   const queryClient = useQueryClient();
   const key = getGetPreferencesQueryKey();
 
-  const query = useGetPreferences({ query: { enabled } });
+  const query = useGetPreferences();
   const preferences = query.data?.preferences ?? [];
 
   const mutation = useSetPreferences({

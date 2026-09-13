@@ -70,8 +70,8 @@ export default function Home() {
   const pendingAudioRef = useRef<{ audioPath?: string; durationSeconds?: number }>({});
 
   // Server-backed history and standing preferences.
-  const { consultations, create, update, remove, removeAll } = useConsultations(true);
-  const { preferences, addPreference, removePreference } = usePreferences(true);
+  const { consultations, create, update, remove, removeAll } = useConsultations();
+  const { preferences, addPreference, removePreference } = usePreferences();
 
   // Refinement chat
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant', text: string }[]>([]);

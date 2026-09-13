@@ -41,6 +41,9 @@ export function rowToConsultation(row: ConsultationRow): Consultation {
   };
 }
 
+/** Storage rejects very large delete batches, so they go out in chunks. */
+const REMOVE_BATCH_SIZE = 100;
+
 /**
  * Remove recordings from the private bucket.
  *
@@ -53,6 +56,10 @@ export async function removeRecordings(
   paths: Array<string | null | undefined>,
 ): Promise<void> {
   const keys = paths.filter((p): p is string => Boolean(p));
-  if (keys.length === 0) return;
-  await supabase.storage.from(RECORDINGS_BUCKET).remove(keys);
+
+  for (let i = 0; i < keys.length; i += REMOVE_BATCH_SIZE) {
+    await supabase.storage
+      .from(RECORDINGS_BUCKET)
+      .remove(keys.slice(i, i + REMOVE_BATCH_SIZE));
+  }
 }

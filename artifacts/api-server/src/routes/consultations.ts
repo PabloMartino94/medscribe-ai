@@ -96,37 +96,25 @@ router.post("/consultations", async (req, res) => {
 });
 
 router.delete("/consultations", async (req, res) => {
-  const { supabase } = authed(req);
+  const { user, supabase } = authed(req);
 
-  // Collect the object keys first: once the rows are gone there is no way left
-  // to find the recordings they pointed at.
-  const { data: existing, error: readError } = await supabase
-    .from("consultations")
-    .select("id, audio_path");
-
-  if (readError) {
-    req.log.error({ err: readError }, "Failed to enumerate consultations before delete");
-    res.status(502).json({ error: "No se pudo borrar el historial" });
-    return;
-  }
-
-  const rows = (existing ?? []) as Array<{ id: string; audio_path: string | null }>;
-  if (rows.length === 0) {
-    res.json(DeleteAllConsultationsResponse.parse({ deleted: 0 }));
-    return;
-  }
-
-  const { error: deleteError } = await supabase
+  // Returning the deleted rows gives both the count and the object keys in one
+  // round trip; listing the ids first and deleting by `in` would put every uuid
+  // into the request URL. RLS would scope this to the caller anyway, but the
+  // explicit user_id keeps the intent on the page.
+  const { data, error } = await supabase
     .from("consultations")
     .delete()
-    .in("id", rows.map((r) => r.id));
+    .eq("user_id", user.id)
+    .select("audio_path");
 
-  if (deleteError) {
-    req.log.error({ err: deleteError }, "Failed to delete consultations");
+  if (error) {
+    req.log.error({ err: error }, "Failed to delete consultations");
     res.status(502).json({ error: "No se pudo borrar el historial" });
     return;
   }
 
+  const rows = (data ?? []) as Array<{ audio_path: string | null }>;
   await removeRecordings(supabase, rows.map((r) => r.audio_path));
 
   res.json(DeleteAllConsultationsResponse.parse({ deleted: rows.length }));
@@ -218,7 +206,7 @@ router.delete("/consultations/:id", async (req, res) => {
 
   const id = Uuid.safeParse(req.params.id);
   if (!id.success) {
-    res.json({ deleted: 0 });
+    res.json(DeleteAllConsultationsResponse.parse({ deleted: 0 }));
     return;
   }
 
