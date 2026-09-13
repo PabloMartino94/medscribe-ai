@@ -91,12 +91,14 @@ router.post(
 
     const durationSeconds = ext === "wav" ? wavDurationSeconds(buffer) : 0;
 
-    const text = await transcribeAudio(buffer, ext, language);
+    const text = await transcribeAudio(buffer, ext, language, (info) =>
+      req.log.warn(info, "Diarization missing; labelling speakers from content"),
+    );
 
     // Length only, never the transcript: an empty result is the one failure
     // that returns 200 and shows up as the app doing nothing.
     req.log.info(
-      { chars: text.length, durationSeconds, format: ext },
+      { chars: text.length, durationSeconds, format: ext, labelled: /^(Médico|Paciente|Acompañante|Hablante)[^:\n]{0,20}:/im.test(text) },
       "Transcription completed",
     );
 
