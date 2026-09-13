@@ -161,6 +161,15 @@ cambiás `AI_TRANSCRIBE_MODEL`, verificá ese comportamiento antes.
 clave alcanza y pruebe con cada candidato una llamada de chat y una de audio,
 dejando el resultado en los logs. Sirve porque un modelo o una modalidad no
 soportada vuelve como un 404 sin cuerpo, sin decir qué nombre esperaba.
+**Consume cuota**: son unas nueve llamadas por arranque, y con varios deploys
+seguidos alcanza para agotar el plan gratuito de Gemini. Encendelo para
+diagnosticar y apagalo enseguida.
+
+Cada transcripción cuesta dos llamadas: una para transcribir y otra para
+etiquetar los hablantes. Transcribir con `gemini-3.5-flash` en vez del modelo
+dedicado concentra las tres tareas (transcribir, etiquetar y estructurar) en
+una sola cuota y la agota tres veces más rápido; el modelo dedicado tiene la
+suya aparte.
 
 El health check apunta a `/api/healthz`.
 
