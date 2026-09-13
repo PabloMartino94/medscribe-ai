@@ -24,7 +24,12 @@ const DEFAULT_MODELS: Record<AiProvider, { transcribe: string; structure: string
 const rawProvider = (process.env["AI_PROVIDER"] ?? "openai").trim().toLowerCase();
 
 if (rawProvider !== "openai" && rawProvider !== "gemini") {
-  throw new Error(`AI_PROVIDER must be "openai" or "gemini", got "${rawProvider}".`);
+  // Never echo the received value: the most likely way to get here is pasting
+  // the API key into the wrong variable, and the message ends up in the logs.
+  throw new Error(
+    'AI_PROVIDER must be exactly "openai" or "gemini". ' +
+      "If you meant to set the API key, the variable is AI_API_KEY.",
+  );
 }
 
 export const PROVIDER: AiProvider = rawProvider;
