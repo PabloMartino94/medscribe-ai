@@ -7,7 +7,7 @@ import {
   StructureNoteBody,
   StructureNoteResponse,
 } from "@workspace/api-zod";
-import { openai, MODELS, toAiProviderError } from "@workspace/openai";
+import { openai, MODELS, PROVIDER, toAiProviderError } from "@workspace/openai";
 import { z } from "zod";
 import { anonymizeText } from "../lib/anonymize";
 import { requireAuth } from "../middlewares/auth";
@@ -98,12 +98,62 @@ function baseMessages(template: TemplateDef, preferences: string[] | undefined):
   return messages;
 }
 
-async function callModel(messages: ChatMessage[]): Promise<ModelOutput | null> {
+/**
+ * The note shape, declared to the model rather than only described in prose.
+ *
+ * `json_object` alone just asks for "some JSON"; the model was answering with
+ * a shape the parser rejected. A schema pins the keys.
+ */
+const NOTE_JSON_SCHEMA = {
+  name: "clinical_note",
+  schema: {
+    type: "object",
+    properties: {
+      title: { type: "string" },
+      sections: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            label: { type: "string" },
+            content: { type: "string" },
+          },
+          required: ["label", "content"],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ["title", "sections"],
+    additionalProperties: false,
+  },
+  // OpenAI-only guarantee; Gemini's compatibility layer does not take it.
+  ...(PROVIDER === "openai" ? { strict: true } : {}),
+} as const;
+
+type ParseFailure = { length: number; validJson: boolean; keys: string[] };
+
+/** Describes a rejected response structurally — never its clinical content. */
+function describeFailure(raw: string): ParseFailure {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return {
+      length: raw.length,
+      validJson: true,
+      keys: parsed && typeof parsed === "object" ? Object.keys(parsed) : [],
+    };
+  } catch {
+    return { length: raw.length, validJson: false, keys: [] };
+  }
+}
+
+async function callModel(
+  messages: ChatMessage[],
+): Promise<{ output: ModelOutput | null; failure?: ParseFailure }> {
   const completion = await openai.chat.completions
     .create({
       model: MODELS.structure,
-      max_completion_tokens: 8192,
-      response_format: { type: "json_object" },
+      max_completion_tokens: 16384,
+      response_format: { type: "json_schema", json_schema: NOTE_JSON_SCHEMA },
       messages,
     })
     .catch((err: unknown) => {
@@ -111,11 +161,12 @@ async function callModel(messages: ChatMessage[]): Promise<ModelOutput | null> {
       // the provider's own status leaking out as ours.
       throw toAiProviderError(err, MODELS.structure);
     });
+
   const raw = completion.choices[0]?.message?.content ?? "";
   try {
-    return ModelOutput.parse(JSON.parse(raw));
+    return { output: ModelOutput.parse(JSON.parse(raw)) };
   } catch {
-    return null;
+    return { output: null, failure: describeFailure(raw) };
   }
 }
 
@@ -159,9 +210,12 @@ router.post("/notes/structure", requireAuth, async (req, res) => {
   const messages = baseMessages(template, preferences);
   messages.push({ role: "user", content: `Transcripción / dictado:\n\n${text}` });
 
-  const output = await callModel(messages);
+  const { output, failure } = await callModel(messages);
   if (!output) {
-    req.log.error("Model returned invalid JSON (structure)");
+    req.log.error(
+      { model: MODELS.structure, ...failure },
+      "Model returned invalid JSON (structure)",
+    );
     res.status(502).json({ error: INVALID_MODEL_OUTPUT });
     return;
   }
@@ -185,9 +239,12 @@ router.post("/notes/refine", requireAuth, async (req, res) => {
     })}\n\nAplicá la siguiente indicación y devolvé la nota completa revisada en el mismo formato JSON. Modificá solo lo necesario para cumplir la indicación; conservá el resto textualmente y no agregues datos clínicos nuevos salvo que la indicación los aporte.\n\nIndicación: ${instruction.trim()}`,
   });
 
-  const output = await callModel(messages);
+  const { output, failure } = await callModel(messages);
   if (!output) {
-    req.log.error("Model returned invalid JSON (refine)");
+    req.log.error(
+      { model: MODELS.structure, ...failure },
+      "Model returned invalid JSON (refine)",
+    );
     res.status(502).json({ error: INVALID_MODEL_OUTPUT });
     return;
   }
