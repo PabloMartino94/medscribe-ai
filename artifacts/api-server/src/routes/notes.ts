@@ -7,7 +7,7 @@ import {
   StructureNoteBody,
   StructureNoteResponse,
 } from "@workspace/api-zod";
-import { openai, MODELS } from "@workspace/openai";
+import { openai, MODELS, toAiProviderError } from "@workspace/openai";
 import { z } from "zod";
 import { anonymizeText } from "../lib/anonymize";
 import { requireAuth } from "../middlewares/auth";
@@ -99,12 +99,18 @@ function baseMessages(template: TemplateDef, preferences: string[] | undefined):
 }
 
 async function callModel(messages: ChatMessage[]): Promise<ModelOutput | null> {
-  const completion = await openai.chat.completions.create({
-    model: MODELS.structure,
-    max_completion_tokens: 8192,
-    response_format: { type: "json_object" },
-    messages,
-  });
+  const completion = await openai.chat.completions
+    .create({
+      model: MODELS.structure,
+      max_completion_tokens: 8192,
+      response_format: { type: "json_object" },
+      messages,
+    })
+    .catch((err: unknown) => {
+      // Surfaces as a 502 with a message naming the likely cause, instead of
+      // the provider's own status leaking out as ours.
+      throw toAiProviderError(err, MODELS.structure);
+    });
   const raw = completion.choices[0]?.message?.content ?? "";
   try {
     return ModelOutput.parse(JSON.parse(raw));

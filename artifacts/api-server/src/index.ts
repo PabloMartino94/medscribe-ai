@@ -1,4 +1,5 @@
 import app from "./app";
+import { logAiDiagnostics } from "@workspace/openai";
 import { logger } from "./lib/logger";
 
 // Render injects PORT; 8080 keeps `pnpm dev` working without extra setup.
@@ -16,4 +17,8 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Opt-in (AI_DIAGNOSTICS=1) and deliberately not awaited: it must never
+  // delay or fail startup.
+  void logAiDiagnostics((obj, msg) => logger.info(obj, msg));
 });

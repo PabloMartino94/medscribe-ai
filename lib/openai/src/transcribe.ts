@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { toFile } from "openai";
 import { MODELS, PROVIDER, openai } from "./client";
+import { toAiProviderError } from "./errors";
 
 export type TranscribableFormat = "wav" | "mp3";
 
@@ -62,31 +63,39 @@ export async function transcribeAudio(
   language: string,
 ): Promise<string> {
   if (PROVIDER === "gemini") {
-    const completion = await openai.chat.completions.create({
-      model: MODELS.transcribe,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: GEMINI_INSTRUCTION },
-            {
-              type: "input_audio",
-              input_audio: { data: buffer.toString("base64"), format },
-            },
-          ],
-        },
-      ],
-    });
+    const completion = await openai.chat.completions
+      .create({
+        model: MODELS.transcribe,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: GEMINI_INSTRUCTION },
+              {
+                type: "input_audio",
+                input_audio: { data: buffer.toString("base64"), format },
+              },
+            ],
+          },
+        ],
+      })
+      .catch((err: unknown) => {
+        throw toAiProviderError(err, MODELS.transcribe);
+      });
 
     return cleanTranscript(completion.choices[0]?.message?.content ?? "");
   }
 
-  const transcription = await openai.audio.transcriptions.create({
-    file: await toFile(buffer, `audio.${format}`),
-    model: MODELS.transcribe,
-    language,
-    prompt: DOMAIN_HINT,
-  });
+  const transcription = await openai.audio.transcriptions
+    .create({
+      file: await toFile(buffer, `audio.${format}`),
+      model: MODELS.transcribe,
+      language,
+      prompt: DOMAIN_HINT,
+    })
+    .catch((err: unknown) => {
+      throw toAiProviderError(err, MODELS.transcribe);
+    });
 
   return cleanTranscript(transcription.text);
 }
