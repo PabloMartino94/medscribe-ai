@@ -4,11 +4,14 @@
 #
 # Secrets are marked `sync: false`: Render prompts for them when the blueprint
 # is first applied and never stores them in this repository.
+#
+# The free plan sleeps after 15 minutes of inactivity and the next request pays
+# a cold start of roughly a minute. Switch `plan` to `starter` to keep it warm.
 services:
   - type: web
     name: medscribe-ai
     runtime: docker
-    plan: starter
+    plan: free
     region: virginia
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/healthz
