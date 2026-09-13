@@ -93,6 +93,13 @@ router.post(
 
     const text = await transcribeAudio(buffer, ext, language);
 
+    // Length only, never the transcript: an empty result is the one failure
+    // that returns 200 and shows up as the app doing nothing.
+    req.log.info(
+      { chars: text.length, durationSeconds, format: ext },
+      "Transcription completed",
+    );
+
     res.json(TranscribeAudioResponse.parse({ text, durationSeconds, audioPath }));
   },
 );

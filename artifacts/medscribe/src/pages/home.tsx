@@ -167,13 +167,25 @@ export default function Home() {
   const transcribeMutation = useTranscribeAudio({
     mutation: {
       onSuccess: (data) => {
-        setText((prev) => (prev ? prev + "\n\n" + data.text : data.text));
         pendingAudioRef.current = {
           ...(data.audioPath ? { audioPath: data.audioPath } : {}),
           ...(data.durationSeconds ? { durationSeconds: data.durationSeconds } : {}),
         };
-        toast({ title: "Transcripción completada", description: `Duración: ${Math.round(data.durationSeconds)}s` });
         setIsUploading(false);
+
+        // An empty transcript is a successful request with nothing in it. Say
+        // so: appending "" left the screen unchanged and looked like a freeze.
+        if (!data.text.trim()) {
+          toast({
+            title: "No se detectó voz en el audio",
+            description: "Revisá el micrófono y volvé a intentar.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setText((prev) => (prev ? prev + "\n\n" + data.text : data.text));
+        toast({ title: "Transcripción completada", description: `Duración: ${Math.round(data.durationSeconds)}s` });
       },
       onError: (err) => {
         toast({ title: "Error de transcripción", description: errorMessage(err, "Ocurrió un error al procesar el audio"), variant: "destructive" });

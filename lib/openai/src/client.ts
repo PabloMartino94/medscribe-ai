@@ -59,6 +59,16 @@ export const openai = new OpenAI({
   ...(baseURL ? { baseURL } : {}),
 });
 
+/** The raw key, for the one call that does not go through the OpenAI client. */
+export const AI_API_KEY: string = apiKey;
+
+/**
+ * Gemini's own REST base. Transcription has to bypass the OpenAI-compatible
+ * surface, which drops the parts the transcription model answers with.
+ */
+export const GEMINI_NATIVE_BASE_URL =
+  process.env["GEMINI_BASE_URL"] || "https://generativelanguage.googleapis.com/v1beta";
+
 /** Models are env-configurable so a deployment can be re-pointed without a rebuild. */
 export const MODELS = {
   transcribe:

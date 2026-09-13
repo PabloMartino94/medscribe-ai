@@ -1,7 +1,13 @@
 import { Buffer } from "node:buffer";
 import { toFile } from "openai";
-import { MODELS, PROVIDER, openai } from "./client";
-import { toAiProviderError } from "./errors";
+import {
+  AI_API_KEY,
+  GEMINI_NATIVE_BASE_URL,
+  MODELS,
+  PROVIDER,
+  openai,
+} from "./client";
+import { AiProviderError, aiErrorFromStatus, toAiProviderError } from "./errors";
 
 export type TranscribableFormat = "wav" | "mp3";
 
@@ -57,33 +63,91 @@ function cleanTranscript(raw: string): string {
  * surface does not implement `/audio/transcriptions` at all, so its audio goes
  * through `/chat/completions` as an `input_audio` content part instead.
  */
+const MIME_BY_FORMAT: Record<TranscribableFormat, string> = {
+  wav: "audio/wav",
+  mp3: "audio/mpeg",
+};
+
+type GeminiPart = { text?: string; audioTranscription?: { text?: string } };
+
+/**
+ * Pulls the transcript out of a generateContent response.
+ *
+ * The transcription model can answer with either plain `text` parts or
+ * `audioTranscription` parts; the OpenAI-compatible surface only forwards the
+ * former, which is why that path returned an empty string for real speech and
+ * this one talks to Gemini directly.
+ */
+function extractTranscript(body: unknown): string {
+  const parts =
+    (body as { candidates?: Array<{ content?: { parts?: GeminiPart[] } }> })?.candidates?.[0]
+      ?.content?.parts ?? [];
+
+  return parts
+    .map((part) => part.text ?? part.audioTranscription?.text ?? "")
+    .join("")
+    .trim();
+}
+
+/** Speech to text through Gemini's own REST API. */
+async function transcribeWithGemini(
+  buffer: Buffer,
+  format: TranscribableFormat,
+): Promise<string> {
+  const url = `${GEMINI_NATIVE_BASE_URL.replace(/\/+$/, "")}/models/${encodeURIComponent(
+    MODELS.transcribe,
+  )}:generateContent`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": AI_API_KEY,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: GEMINI_INSTRUCTION },
+              {
+                inline_data: {
+                  mime_type: MIME_BY_FORMAT[format],
+                  data: buffer.toString("base64"),
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    });
+  } catch {
+    throw new AiProviderError("No se pudo contactar a Gemini. Reintentá en unos segundos.");
+  }
+
+  if (!response.ok) {
+    throw aiErrorFromStatus(response.status, MODELS.transcribe);
+  }
+
+  return cleanTranscript(extractTranscript(await response.json()));
+}
+
+/**
+ * Speech to text, across both providers.
+ *
+ * OpenAI has a dedicated transcription endpoint. Gemini has one too, but not
+ * on its OpenAI-compatible surface — that path answers 200 with empty content
+ * for the transcription model — so Gemini audio goes to its native REST API.
+ */
 export async function transcribeAudio(
   buffer: Buffer,
   format: TranscribableFormat,
   language: string,
 ): Promise<string> {
   if (PROVIDER === "gemini") {
-    const completion = await openai.chat.completions
-      .create({
-        model: MODELS.transcribe,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: GEMINI_INSTRUCTION },
-              {
-                type: "input_audio",
-                input_audio: { data: buffer.toString("base64"), format },
-              },
-            ],
-          },
-        ],
-      })
-      .catch((err: unknown) => {
-        throw toAiProviderError(err, MODELS.transcribe);
-      });
-
-    return cleanTranscript(completion.choices[0]?.message?.content ?? "");
+    return transcribeWithGemini(buffer, format);
   }
 
   const transcription = await openai.audio.transcriptions

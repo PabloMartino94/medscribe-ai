@@ -24,17 +24,11 @@ export class AiProviderError extends Error {
 const PROVIDER_LABEL = PROVIDER === "gemini" ? "Gemini" : "OpenAI";
 
 /**
- * Maps a provider failure to something a user can act on, naming the likely
- * cause rather than echoing the raw status.
+ * Maps a provider HTTP status to something a user can act on, naming the
+ * likely cause rather than echoing the raw status.
  */
-export function toAiProviderError(err: unknown, model: string): AiProviderError {
-  if (!(err instanceof APIError)) {
-    return new AiProviderError(
-      `No se pudo contactar a ${PROVIDER_LABEL}. Reintentá en unos segundos.`,
-    );
-  }
-
-  switch (err.status) {
+export function aiErrorFromStatus(status: number, model: string): AiProviderError {
+  switch (status) {
     case 400:
       return new AiProviderError(
         `${PROVIDER_LABEL} rechazó el pedido. Puede que el modelo "${model}" no acepte este tipo de entrada.`,
@@ -44,7 +38,7 @@ export function toAiProviderError(err: unknown, model: string): AiProviderError 
     case 403:
       return new AiProviderError(
         `${PROVIDER_LABEL} rechazó la credencial. Revisá AI_API_KEY.`,
-        err.status,
+        status,
       );
     case 404:
       return new AiProviderError(
@@ -58,10 +52,21 @@ export function toAiProviderError(err: unknown, model: string): AiProviderError 
       );
     default:
       return new AiProviderError(
-        `${PROVIDER_LABEL} falló (error ${err.status}). Reintentá en unos segundos.`,
-        err.status,
+        `${PROVIDER_LABEL} falló (error ${status}). Reintentá en unos segundos.`,
+        status,
       );
   }
+}
+
+/** Same, for a failure raised by the OpenAI client. */
+export function toAiProviderError(err: unknown, model: string): AiProviderError {
+  if (err instanceof AiProviderError) return err;
+  if (!(err instanceof APIError)) {
+    return new AiProviderError(
+      `No se pudo contactar a ${PROVIDER_LABEL}. Reintentá en unos segundos.`,
+    );
+  }
+  return aiErrorFromStatus(err.status ?? 502, model);
 }
 
 export const CONFIGURED_MODELS = MODELS;
