@@ -1,0 +1,37 @@
+# Render blueprint. One web service runs the Express API and serves the built
+# frontend from the same origin, so there is no CORS to configure and the SPA
+# talks to relative /api paths.
+#
+# Secrets are marked `sync: false`: Render prompts for them when the blueprint
+# is first applied and never stores them in this repository.
+services:
+  - type: web
+    name: medscribe-ai
+    runtime: docker
+    plan: starter
+    region: virginia
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+
+      # OpenAI — transcription and note structuring.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_TRANSCRIBE_MODEL
+        value: gpt-4o-mini-transcribe
+      - key: OPENAI_STRUCTURE_MODEL
+        value: gpt-4o
+
+      # Supabase — authentication, consultation storage, audio bucket.
+      # The publishable key is safe to expose: it is served to the browser by
+      # /api/config and grants nothing without a session, because every table
+      # is behind row level security.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false

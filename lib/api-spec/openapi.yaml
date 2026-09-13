@@ -1,0 +1,609 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: >-
+    MedScribe AI API — transcription, clinical structuring and per-physician
+    storage of consultations. Every endpoint except /healthz and /templates
+    requires a Supabase access token and only ever sees the caller's own rows.
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: config
+    description: Public client configuration
+  - name: templates
+    description: Output templates
+  - name: notes
+    description: Clinical note processing
+  - name: audio
+    description: Audio transcription
+  - name: consultations
+    description: Stored clinical consultations
+  - name: preferences
+    description: Standing style preferences
+  - name: account
+    description: Authenticated account
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /config:
+    get:
+      operationId: getRuntimeConfig
+      tags: [config]
+      summary: Public client configuration
+      description: >-
+        Served at runtime rather than baked into the bundle, so the Supabase
+        project or its publishable key can change without rebuilding the
+        frontend. Contains only values that are safe in a browser.
+      security: []
+      responses:
+        "200":
+          description: Configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeConfig"
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [templates]
+      summary: List available output templates
+      security: []
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+  /notes/anonymize:
+    post:
+      operationId: anonymizeText
+      tags: [notes]
+      summary: Replace proper names and identifiers with initials/placeholders (local heuristic, no AI call)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnonymizeInput"
+      responses:
+        "200":
+          description: Anonymized text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnonymizeResult"
+  /notes/structure:
+    post:
+      operationId: structureNote
+      tags: [notes]
+      summary: Structure free text / transcript into the chosen clinical template using AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteInput"
+      responses:
+        "200":
+          description: Structured note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StructuredNote"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /notes/refine:
+    post:
+      operationId: refineNote
+      tags: [notes]
+      summary: Apply a chat instruction to an already structured note and return the revised note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefineInput"
+      responses:
+        "200":
+          description: Revised structured note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StructuredNote"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /audio/transcribe:
+    post:
+      operationId: transcribeAudio
+      tags: [audio]
+      summary: Transcribe an audio recording or uploaded file (webm, mp3, m4a, wav, ogg) to text
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/AudioUpload"
+      responses:
+        "200":
+          description: Transcript
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transcription"
+        "400":
+          description: Invalid audio
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /me:
+    get:
+      operationId: getCurrentUser
+      tags: [account]
+      summary: Profile of the authenticated physician
+      responses:
+        "200":
+          description: Account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /preferences:
+    get:
+      operationId: getPreferences
+      tags: [preferences]
+      summary: Standing style preferences of the authenticated physician
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+    put:
+      operationId: setPreferences
+      tags: [preferences]
+      summary: Replace the standing style preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Preferences"
+      responses:
+        "200":
+          description: Saved preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+  /consultations:
+    get:
+      operationId: listConsultations
+      tags: [consultations]
+      summary: List the authenticated physician's consultations, newest first
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        "200":
+          description: Consultations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Consultation"
+    post:
+      operationId: createConsultation
+      tags: [consultations]
+      summary: Store a structured note as a consultation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsultationInput"
+      responses:
+        "201":
+          description: Stored consultation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Consultation"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteAllConsultations
+      tags: [consultations]
+      summary: Delete every consultation and stored recording of the authenticated physician
+      responses:
+        "200":
+          description: Number of consultations deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedCount"
+  /consultations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getConsultation
+      tags: [consultations]
+      summary: Fetch one consultation
+      responses:
+        "200":
+          description: Consultation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Consultation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateConsultation
+      tags: [consultations]
+      summary: Update a stored consultation, e.g. after refining the note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConsultationUpdate"
+      responses:
+        "200":
+          description: Updated consultation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Consultation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteConsultation
+      tags: [consultations]
+      summary: Delete one consultation and its stored recording
+      responses:
+        "200":
+          description: Number of consultations deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedCount"
+  /consultations/{id}/audio:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getConsultationAudio
+      tags: [consultations]
+      summary: Short-lived signed URL for the consultation's stored recording
+      responses:
+        "200":
+          description: Signed URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AudioLink"
+        "404":
+          description: No recording stored for this consultation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase access token of the signed-in physician
+  schemas:
+    RuntimeConfig:
+      type: object
+      required: [supabaseUrl, supabasePublishableKey]
+      properties:
+        supabaseUrl:
+          type: string
+        supabasePublishableKey:
+          type: string
+          description: Publishable (anon) key — safe to expose, gated by RLS
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    TemplateId:
+      type: string
+      enum: [soap, evolucion, informe, receta]
+    Template:
+      type: object
+      required: [id, name, description, sections]
+      properties:
+        id:
+          $ref: "#/components/schemas/TemplateId"
+        name:
+          type: string
+          description: Short display name in Spanish (e.g. "SOAP")
+        description:
+          type: string
+          description: One-line description of when to use it
+        sections:
+          type: array
+          description: Ordered section labels the AI will produce for this template
+          items:
+            type: string
+    AnonymizeInput:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+    AnonymizeResult:
+      type: object
+      required: [text, replacements]
+      properties:
+        text:
+          type: string
+        replacements:
+          type: integer
+          description: Number of identifiers replaced
+    NoteInput:
+      type: object
+      required: [text, template]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: Raw transcript or dictation
+        template:
+          $ref: "#/components/schemas/TemplateId"
+        anonymize:
+          type: boolean
+          default: false
+          description: Run the local anonymizer before sending the text to the AI
+        preferences:
+          type: array
+          description: Standing style instructions the physician wants applied to every note
+          items:
+            type: string
+    RefineInput:
+      type: object
+      required: [note, instruction]
+      properties:
+        note:
+          $ref: "#/components/schemas/StructuredNote"
+        instruction:
+          type: string
+          minLength: 1
+          description: What to change in this note
+        preferences:
+          type: array
+          description: Standing style instructions applied to every note
+          items:
+            type: string
+    NoteSection:
+      type: object
+      required: [label, content]
+      properties:
+        label:
+          type: string
+        content:
+          type: string
+          description: Plain text, no markdown
+    StructuredNote:
+      type: object
+      required: [template, title, sections, plainText, processedAt]
+      properties:
+        template:
+          $ref: "#/components/schemas/TemplateId"
+        title:
+          type: string
+          description: Short auto-generated title (e.g. chief complaint) for the history list
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/NoteSection"
+        plainText:
+          type: string
+          description: Full note as clean plain text, ready to paste into any EHR
+        anonymized:
+          type: boolean
+        processedAt:
+          type: string
+          format: date-time
+    AudioUpload:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+        language:
+          type: string
+          description: ISO language hint, defaults to "es"
+        store:
+          type: string
+          enum: ["true", "false"]
+          description: Keep the recording in the private bucket and return its object key
+    Transcription:
+      type: object
+      required: [text, durationSeconds]
+      properties:
+        text:
+          type: string
+        durationSeconds:
+          type: number
+        audioPath:
+          type: string
+          nullable: true
+          description: Object key of the stored recording, when store was requested
+    Account:
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        fullName:
+          type: string
+          nullable: true
+    Preferences:
+      type: object
+      required: [preferences]
+      properties:
+        preferences:
+          type: array
+          description: Standing style instructions applied to every note
+          items:
+            type: string
+    DeletedCount:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: integer
+    AudioLink:
+      type: object
+      required: [url, expiresIn]
+      properties:
+        url:
+          type: string
+        expiresIn:
+          type: integer
+          description: Seconds the signed URL stays valid
+    Consultation:
+      type: object
+      required:
+        [id, template, title, sections, plainText, anonymized, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientRef:
+          type: string
+          nullable: true
+          description: Free-text label chosen by the physician to recognise the consultation
+        template:
+          $ref: "#/components/schemas/TemplateId"
+        title:
+          type: string
+        sections:
+          type: array
+          items:
+            $ref: "#/components/schemas/NoteSection"
+        plainText:
+          type: string
+        anonymized:
+          type: boolean
+        transcript:
+          type: string
+          nullable: true
+          description: Raw transcript the note was generated from
+        audioPath:
+          type: string
+          nullable: true
+          description: Object key of the recording in the private storage bucket
+        audioDurationSeconds:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ConsultationInput:
+      type: object
+      required: [note]
+      properties:
+        note:
+          $ref: "#/components/schemas/StructuredNote"
+        patientRef:
+          type: string
+        transcript:
+          type: string
+        audioPath:
+          type: string
+        audioDurationSeconds:
+          type: number
+    ConsultationUpdate:
+      type: object
+      properties:
+        note:
+          $ref: "#/components/schemas/StructuredNote"
+        patientRef:
+          type: string

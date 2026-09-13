@@ -1,0 +1,22 @@
+{
+  "name": "medscribe-ai",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm run --parallel --filter \"./artifacts/**\" dev",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --if-present run typecheck",
+    "codegen": "pnpm --filter @workspace/api-spec run codegen",
+    "start": "node --enable-source-maps artifacts/api-server/dist/index.mjs"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  }
+}
