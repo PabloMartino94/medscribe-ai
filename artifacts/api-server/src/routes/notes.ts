@@ -101,34 +101,46 @@ function baseMessages(template: TemplateDef, preferences: string[] | undefined):
 /**
  * The note shape, declared to the model rather than only described in prose.
  *
- * `json_object` alone just asks for "some JSON"; the model was answering with
- * a shape the parser rejected. A schema pins the keys.
+ * The labels are an enum of this template's own sections: asking for them in
+ * the prompt left the model free to answer "Analisis" or "Evolución:", and the
+ * lookup that fills the note is by label, so a renamed section was silently
+ * dropped and replaced with the "no data" filler.
  */
-const NOTE_JSON_SCHEMA = {
-  name: "clinical_note",
-  schema: {
+function noteSchemaFor(template: TemplateDef) {
+  const items = {
     type: "object",
     properties: {
-      title: { type: "string" },
-      sections: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            label: { type: "string" },
-            content: { type: "string" },
-          },
-          required: ["label", "content"],
-          additionalProperties: false,
-        },
-      },
+      label: { type: "string", enum: template.sections },
+      content: { type: "string" },
     },
-    required: ["title", "sections"],
+    required: ["label", "content"],
     additionalProperties: false,
-  },
-  // OpenAI-only guarantee; Gemini's compatibility layer does not take it.
-  ...(PROVIDER === "openai" ? { strict: true } : {}),
-} as const;
+  } as const;
+
+  return {
+    name: "clinical_note",
+    schema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        // OpenAI's strict mode rejects minItems/maxItems, so the count is only
+        // pinned for the provider that accepts it.
+        sections:
+          PROVIDER === "openai"
+            ? { type: "array", items }
+            : {
+                type: "array",
+                minItems: template.sections.length,
+                maxItems: template.sections.length,
+                items,
+              },
+      },
+      required: ["title", "sections"],
+      additionalProperties: false,
+    },
+    ...(PROVIDER === "openai" ? { strict: true } : {}),
+  };
+}
 
 type ParseFailure = { length: number; validJson: boolean; keys: string[] };
 
@@ -148,12 +160,13 @@ function describeFailure(raw: string): ParseFailure {
 
 async function callModel(
   messages: ChatMessage[],
+  template: TemplateDef,
 ): Promise<{ output: ModelOutput | null; failure?: ParseFailure }> {
   const completion = await openai.chat.completions
     .create({
       model: MODELS.structure,
       max_completion_tokens: 16384,
-      response_format: { type: "json_schema", json_schema: NOTE_JSON_SCHEMA },
+      response_format: { type: "json_schema", json_schema: noteSchemaFor(template) },
       messages,
     })
     .catch((err: unknown) => {
@@ -170,12 +183,33 @@ async function callModel(
   }
 }
 
+/** Accents, case and punctuation are not meaningful when matching a label. */
+function normalizeLabel(label: string): string {
+  return label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function buildNote(template: TemplateDef, output: ModelOutput, anonymized: boolean) {
-  const byLabel = new Map(output.sections.map((s) => [s.label.trim().toLowerCase(), s.content]));
-  const sections = template.sections.map((label) => ({
-    label,
-    content: stripMarkdown(byLabel.get(label.toLowerCase()) ?? "Sin datos referidos."),
-  }));
+  const byLabel = new Map(output.sections.map((s) => [normalizeLabel(s.label), s.content]));
+
+  const sections = template.sections.map((label, index) => {
+    const matched = byLabel.get(normalizeLabel(label));
+    // If the model renamed the sections but returned the right number of them
+    // in order, position is a far better guess than discarding the note.
+    const positional =
+      output.sections.length === template.sections.length
+        ? output.sections[index]?.content
+        : undefined;
+
+    return {
+      label,
+      content: stripMarkdown(matched ?? positional ?? "Sin datos referidos."),
+    };
+  });
   const plainText =
     sections.length === 1
       ? sections[0]!.content
@@ -210,7 +244,7 @@ router.post("/notes/structure", requireAuth, async (req, res) => {
   const messages = baseMessages(template, preferences);
   messages.push({ role: "user", content: `Transcripción / dictado:\n\n${text}` });
 
-  const { output, failure } = await callModel(messages);
+  const { output, failure } = await callModel(messages, template);
   if (!output) {
     req.log.error(
       { model: MODELS.structure, ...failure },
@@ -239,7 +273,7 @@ router.post("/notes/refine", requireAuth, async (req, res) => {
     })}\n\nAplicá la siguiente indicación y devolvé la nota completa revisada en el mismo formato JSON. Modificá solo lo necesario para cumplir la indicación; conservá el resto textualmente y no agregues datos clínicos nuevos salvo que la indicación los aporte.\n\nIndicación: ${instruction.trim()}`,
   });
 
-  const { output, failure } = await callModel(messages);
+  const { output, failure } = await callModel(messages, template);
   if (!output) {
     req.log.error(
       { model: MODELS.structure, ...failure },
