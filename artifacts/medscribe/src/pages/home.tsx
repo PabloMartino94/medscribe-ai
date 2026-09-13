@@ -164,6 +164,40 @@ export default function Home() {
     }
   });
 
+  // Regenerating an existing note into another template. Separate from the
+  // mutation above because its result is saved differently: it carries the
+  // original transcript but never the recording.
+  const regenerateSourceRef = useRef<string | null>(null);
+
+  const regenerateMutation = useStructureNote({
+    mutation: {
+      onSuccess: async (note) => {
+        const transcript = regenerateSourceRef.current;
+        regenerateSourceRef.current = null;
+        try {
+          const saved = await create.mutateAsync({
+            data: {
+              note,
+              ...(transcript ? { transcript } : {}),
+              // The recording stays with the note it was made for: two rows
+              // pointing at one object would delete each other's audio.
+            },
+          });
+          setCurrentNote(saved);
+          setChatMessages([]);
+          const name = templates.find((t) => t.id === saved.template)?.name ?? saved.template;
+          toast({ title: `Nota regenerada como ${name}` });
+        } catch (err) {
+          toast({ title: "La nota se generó pero no se pudo guardar", description: errorMessage(err, "Reintentá en unos segundos"), variant: "destructive" });
+        }
+      },
+      onError: (err) => {
+        regenerateSourceRef.current = null;
+        toast({ title: "Error al regenerar", description: errorMessage(err, "Ocurrió un error inesperado"), variant: "destructive" });
+      }
+    }
+  });
+
   const transcribeMutation = useTranscribeAudio({
     mutation: {
       onSuccess: (data) => {
@@ -266,6 +300,33 @@ export default function Home() {
     }
   };
 
+  const handleTemplateChange = (id: string) => {
+    setSelectedTemplateId(id);
+
+    // With no note open the picker just chooses the format of the next one.
+    if (!currentNote || id === currentNote.template || regenerateMutation.isPending) return;
+
+    const transcript = currentNote.transcript?.trim();
+    if (!transcript) {
+      toast({
+        title: "Esta nota no se puede regenerar",
+        description: "No tiene guardada la transcripción de origen.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    regenerateSourceRef.current = transcript;
+    regenerateMutation.mutate({
+      data: {
+        text: transcript,
+        template: id as Consultation["template"],
+        anonymize: currentNote.anonymized,
+        preferences: preferences.length > 0 ? preferences : undefined,
+      },
+    });
+  };
+
   const handleAnonymizeNow = () => {
     if (!text.trim()) return;
     anonymizeMutation.mutate({ data: { text } });
@@ -294,6 +355,7 @@ export default function Home() {
 
   const loadHistoryNote = (note: Consultation) => {
     setCurrentNote(note);
+    // Raw setter on purpose: opening a note must not regenerate it.
     setSelectedTemplateId(note.template);
     setChatMessages([]);
     toast({ title: "Nota cargada desde el historial" });
@@ -666,15 +728,34 @@ export default function Home() {
               <div className="flex flex-wrap items-center justify-between gap-4 bg-muted/30 p-3 rounded-lg border border-border/50">
                 <div className="flex-1 min-w-[200px]">
                   {templates.length > 0 && (
-                    <Tabs value={selectedTemplateId} onValueChange={setSelectedTemplateId} className="w-full">
-                      <TabsList className="w-full h-auto flex-wrap p-1">
-                        {templates.map(t => (
-                          <TabsTrigger key={t.id} value={t.id} className="flex-1 text-xs py-1.5">
-                            {t.name}
-                          </TabsTrigger>
-                        ))}
-                      </TabsList>
-                    </Tabs>
+                    <div className="space-y-1.5">
+                      <Tabs value={selectedTemplateId} onValueChange={handleTemplateChange} className="w-full">
+                        <TabsList className="w-full h-auto flex-wrap p-1">
+                          {templates.map(t => (
+                            <TabsTrigger
+                              key={t.id}
+                              value={t.id}
+                              disabled={regenerateMutation.isPending}
+                              className="flex-1 text-xs py-1.5"
+                            >
+                              {t.name}
+                            </TabsTrigger>
+                          ))}
+                        </TabsList>
+                      </Tabs>
+                      <p className="text-[11px] text-muted-foreground leading-tight flex items-center gap-1.5">
+                        {regenerateMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                            Regenerando la nota en ese formato...
+                          </>
+                        ) : currentNote ? (
+                          "Elegí otro formato para regenerar esta consulta."
+                        ) : (
+                          "Formato de la nota que vas a generar."
+                        )}
+                      </p>
+                    </div>
                   )}
                 </div>
 
