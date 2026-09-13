@@ -5,6 +5,7 @@ export { logAiDiagnostics } from "./diagnostics";
 export {
   detectAudioFormat,
   convertToWav,
+  convertToMp3,
   ensureCompatibleFormat,
   wavDurationSeconds,
   type AudioFormat,

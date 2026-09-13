@@ -86,6 +86,52 @@ export async function convertToWav(audioBuffer: Buffer): Promise<Buffer> {
   }
 }
 
+/**
+ * Convert audio to 16 kHz mono MP3.
+ *
+ * Speech survives heavy compression, and the transcription endpoint caps a
+ * request at 20 MB: as uncompressed WAV that is about ten minutes, which is
+ * shorter than a real consultation. At 48 kbps the same ten minutes is under
+ * 4 MB, so the provider's own 30-minute ceiling becomes the binding limit
+ * rather than the request size.
+ */
+export async function convertToMp3(audioBuffer: Buffer): Promise<Buffer> {
+  const inputPath = join(tmpdir(), `input-${randomUUID()}`);
+  const outputPath = join(tmpdir(), `output-${randomUUID()}.mp3`);
+
+  try {
+    await writeFile(inputPath, audioBuffer);
+
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn(FFMPEG, [
+        "-i", inputPath,
+        "-vn",
+        "-ar", "16000",
+        "-ac", "1",
+        "-codec:a", "libmp3lame",
+        "-b:a", "48k",
+        "-y",
+        outputPath,
+      ]);
+
+      let stderr = "";
+      ffmpeg.stderr.on("data", (chunk) => {
+        stderr = (stderr + String(chunk)).slice(-2000);
+      });
+      ffmpeg.on("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`ffmpeg exited with code ${code}: ${stderr}`));
+      });
+      ffmpeg.on("error", reject);
+    });
+
+    return await readFile(outputPath);
+  } finally {
+    await unlink(inputPath).catch(() => {});
+    await unlink(outputPath).catch(() => {});
+  }
+}
+
 /** Auto-detect and convert audio to an OpenAI-compatible format. */
 export async function ensureCompatibleFormat(
   audioBuffer: Buffer,

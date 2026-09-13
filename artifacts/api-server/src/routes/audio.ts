@@ -2,8 +2,10 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import { TranscribeAudioResponse } from "@workspace/api-zod";
 import {
+  convertToMp3,
   convertToWav,
   detectAudioFormat,
+  PROVIDER,
   transcribeAudio,
   wavDurationSeconds,
   type TranscribableFormat,
@@ -68,18 +70,16 @@ router.post(
       }
     }
 
-    let buffer: Buffer;
-    let ext: TranscribableFormat;
-    if (detected === "mp3") {
-      buffer = file.buffer;
-      ext = "mp3";
-    } else if (detected === "wav") {
-      buffer = file.buffer;
-      ext = "wav";
-    } else {
+    // Duration is read off the WAV, which is also what OpenAI's endpoint wants.
+    // Gemini gets MP3 instead: its transcription endpoint caps a request at
+    // 20 MB, and uncompressed audio would cut a consultation off at about ten
+    // minutes.
+    let wav: Buffer | null = null;
+    if (detected === "wav") {
+      wav = file.buffer;
+    } else if (detected !== "mp3") {
       try {
-        buffer = await convertToWav(file.buffer);
-        ext = "wav";
+        wav = await convertToWav(file.buffer);
       } catch (err) {
         req.log.error({ err, detected, mimetype: file.mimetype }, "ffmpeg conversion failed");
         res.status(400).json({
@@ -89,7 +89,28 @@ router.post(
       }
     }
 
-    const durationSeconds = ext === "wav" ? wavDurationSeconds(buffer) : 0;
+    const durationSeconds = wav ? wavDurationSeconds(wav) : 0;
+
+    let buffer: Buffer;
+    let ext: TranscribableFormat;
+    if (detected === "mp3") {
+      buffer = file.buffer;
+      ext = "mp3";
+    } else if (PROVIDER === "gemini") {
+      try {
+        buffer = await convertToMp3(file.buffer);
+        ext = "mp3";
+      } catch (err) {
+        // Compression is an optimisation; the uncompressed audio still works
+        // for anything short enough to fit.
+        req.log.warn({ err }, "mp3 compression failed; sending wav");
+        buffer = wav!;
+        ext = "wav";
+      }
+    } else {
+      buffer = wav!;
+      ext = "wav";
+    }
 
     const text = await transcribeAudio(buffer, ext, language, (info) =>
       req.log.warn(info, "Diarization missing; labelling speakers from content"),
@@ -98,7 +119,7 @@ router.post(
     // Length only, never the transcript: an empty result is the one failure
     // that returns 200 and shows up as the app doing nothing.
     req.log.info(
-      { chars: text.length, durationSeconds, format: ext, labelled: /^(Médico|Paciente|Acompañante|Hablante)[^:\n]{0,20}:/im.test(text) },
+      { chars: text.length, durationSeconds, format: ext, bytes: buffer.length, labelled: /^(Médico|Paciente|Acompañante|Hablante)[^:\n]{0,20}:/im.test(text) },
       "Transcription completed",
     );
 

@@ -155,6 +155,98 @@ async function labelSpeakers(transcript: string): Promise<string> {
   }
 }
 
+/**
+ * Pulls speaker-labelled turns out of an Interactions API response.
+ *
+ * The exact nesting is not something to hard-code against: the response is
+ * walked for any object carrying text, and the nearest speaker field wins.
+ * Anything unrecognised falls through to the caller's fallback.
+ */
+function extractTurns(node: unknown, out: Array<{ speaker?: string; text: string }> = []) {
+  if (Array.isArray(node)) {
+    for (const item of node) extractTurns(item, out);
+    return out;
+  }
+  if (!node || typeof node !== "object") return out;
+
+  const obj = node as Record<string, unknown>;
+  const text = typeof obj["text"] === "string" ? obj["text"] : undefined;
+  const speaker =
+    typeof obj["speaker"] === "string"
+      ? obj["speaker"]
+      : typeof obj["speaker_id"] === "string" || typeof obj["speaker_id"] === "number"
+        ? String(obj["speaker_id"])
+        : typeof obj["speakerId"] === "string" || typeof obj["speakerId"] === "number"
+          ? String(obj["speakerId"])
+          : undefined;
+
+  if (text && text.trim()) {
+    out.push(speaker ? { speaker, text: text.trim() } : { text: text.trim() });
+  }
+
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object") extractTurns(value, out);
+  }
+  return out;
+}
+
+/**
+ * Speech to text through the Interactions API, which is where Gemini exposes
+ * real speaker separation. `generateContent` silently ignores the diarization
+ * setting, so a two-voice recording came back as one block.
+ */
+async function transcribeWithInteractions(
+  buffer: Buffer,
+  mimeType: string,
+): Promise<{ transcript: string; diarized: boolean; keys: string[] } | null> {
+  const url = `${GEMINI_NATIVE_BASE_URL.replace(/\/+$/, "")}/interactions`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": AI_API_KEY,
+        "content-type": "application/json",
+        // The endpoint is versioned by date, not by path.
+        "Api-Revision": "2026-05-20",
+      },
+      body: JSON.stringify({
+        model: MODELS.transcribe,
+        input: [
+          { type: "text", text: GEMINI_INSTRUCTION },
+          { type: "audio", data: buffer.toString("base64"), mime_type: mimeType },
+        ],
+        generation_config: {
+          // Diarization is only available alongside verbatim mode.
+          transcription_config: { mode: { type: "verbatim", diarization_mode: "speaker" } },
+        },
+      }),
+    });
+  } catch {
+    return null;
+  }
+
+  if (!response.ok) return null;
+
+  const body: unknown = await response.json().catch(() => null);
+  if (!body) return null;
+
+  const turns = extractTurns(body);
+  if (turns.length === 0) return null;
+
+  const diarized = turns.some((t) => t.speaker !== undefined);
+  const transcript = diarized
+    ? turns.map((t) => (t.speaker ? `${t.speaker}: ${t.text}` : t.text)).join("\n")
+    : turns.map((t) => t.text).join(" ");
+
+  return {
+    transcript: cleanTranscript(transcript),
+    diarized,
+    keys: Object.keys(body as Record<string, unknown>),
+  };
+}
+
 /** Speech to text through Gemini's own REST API. */
 async function transcribeWithGemini(
   buffer: Buffer,
@@ -204,16 +296,8 @@ async function transcribeWithGemini(
   }
 
   const { text, partKeys } = extractTranscript(await response.json());
-  const transcript = cleanTranscript(text);
-
-  if (!transcript || SPEAKER_LINE.test(transcript)) {
-    return transcript;
-  }
-
-  // Diarization was requested but nothing came back labelled. Record the shape
-  // the response actually had, so the next fix is not another guess.
-  onDiagnostic?.({ diarization: "absent", partKeys });
-  return labelSpeakers(transcript);
+  onDiagnostic?.({ path: "generateContent", partKeys });
+  return cleanTranscript(text);
 }
 
 /**
@@ -230,7 +314,27 @@ export async function transcribeAudio(
   onDiagnostic?: (info: Record<string, unknown>) => void,
 ): Promise<string> {
   if (PROVIDER === "gemini") {
-    return transcribeWithGemini(buffer, format, onDiagnostic);
+    // Preferred: real separation by voice.
+    const viaInteractions = await transcribeWithInteractions(buffer, MIME_BY_FORMAT[format]);
+
+    if (viaInteractions?.diarized && viaInteractions.transcript) {
+      onDiagnostic?.({ path: "interactions", diarization: "acoustic" });
+      return viaInteractions.transcript;
+    }
+
+    // Otherwise fall back to generateContent, then infer the speakers from
+    // what was said. Inference is the last resort, never the first choice.
+    const transcript =
+      viaInteractions?.transcript ||
+      (await transcribeWithGemini(buffer, format, onDiagnostic));
+
+    if (!transcript || SPEAKER_LINE.test(transcript)) return transcript;
+
+    onDiagnostic?.({
+      diarization: "absent",
+      interactionsKeys: viaInteractions?.keys,
+    });
+    return labelSpeakers(transcript);
   }
 
   const transcription = await openai.audio.transcriptions
