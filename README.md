@@ -120,7 +120,19 @@ Opcionales: `AI_BASE_URL`, `AI_TRANSCRIBE_MODEL`, `AI_STRUCTURE_MODEL`,
 `CORS_ORIGINS`, `LOG_LEVEL`, `STATIC_DIR`, `FFMPEG_PATH`.
 
 Modelos por defecto: con `openai`, `gpt-4o-mini-transcribe` y `gpt-4o`; con
-`gemini`, `gemini-2.5-flash` para ambas cosas.
+`gemini`, `gemini-3.5-transcribe` para transcribir y `gemini-3.5-flash` para
+estructurar.
+
+La transcripción usa el modelo dedicado a propósito: probados contra la API
+real con medio segundo de silencio, los modelos flash genéricos inventaron
+habla ("Hola, buenos días."), que en una nota clínica es un hallazgo
+fabricado. `gemini-3.5-transcribe` devolvió vacío, que es lo correcto. Si
+cambiás `AI_TRANSCRIBE_MODEL`, verificá ese comportamiento antes.
+
+`AI_DIAGNOSTICS=1` hace que el servidor, al arrancar, liste los modelos que la
+clave alcanza y pruebe con cada candidato una llamada de chat y una de audio,
+dejando el resultado en los logs. Sirve porque un modelo o una modalidad no
+soportada vuelve como un 404 sin cuerpo, sin decir qué nombre esperaba.
 
 El health check apunta a `/api/healthz`.
 

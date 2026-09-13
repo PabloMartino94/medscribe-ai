@@ -16,9 +16,12 @@ const DEFAULT_MODELS: Record<AiProvider, { transcribe: string; structure: string
   // Cheapest OpenAI models that still produce reliable Spanish clinical prose
   // and strict JSON.
   openai: { transcribe: "gpt-4o-mini-transcribe", structure: "gpt-4o" },
-  // Gemini has no dedicated speech-to-text model; the same multimodal model
-  // handles audio input and structuring.
-  gemini: { transcribe: "gemini-2.5-flash", structure: "gemini-2.5-flash" },
+  // Probed against the live API: gemini-2.5-flash answers 404 on this key even
+  // for plain chat, despite being listed. Transcription uses the dedicated
+  // model on purpose — on half a second of silence the general-purpose flash
+  // models invented speech ("Hola, buenos días."), which in a clinical note is
+  // a fabricated finding; gemini-3.5-transcribe correctly returned nothing.
+  gemini: { transcribe: "gemini-3.5-transcribe", structure: "gemini-3.5-flash" },
 };
 
 const rawProvider = (process.env["AI_PROVIDER"] ?? "openai").trim().toLowerCase();
