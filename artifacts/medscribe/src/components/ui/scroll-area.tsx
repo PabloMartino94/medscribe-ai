@@ -12,7 +12,16 @@ const ScrollArea = React.forwardRef<
     className={cn("relative overflow-hidden", className)}
     {...props}
   >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+    {/*
+      Radix styles the viewport's inner wrapper `display: table`, which sizes to
+      the content's *minimum* width rather than the container's. Anything with
+      `truncate` sets white-space: nowrap, so that minimum is the untruncated
+      text — and the whole panel grew past its column and was clipped, taking
+      the switches and the right half of every line with it. Forcing the
+      wrapper back to a block makes it honour the column, and truncation then
+      does what it says.
+    */}
+    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit] [&>div]:!block">
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollBar />
