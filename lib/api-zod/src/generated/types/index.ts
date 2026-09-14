@@ -12,6 +12,7 @@ export * from './anonymizeResult';
 export * from './audioLink';
 export * from './audioUpload';
 export * from './audioUploadStore';
+export * from './batchDeleteInput';
 export * from './consultation';
 export * from './consultationInput';
 export * from './consultationUpdate';

@@ -5,6 +5,7 @@ import {
   useUpdateConsultation,
   useDeleteConsultation,
   useDeleteAllConsultations,
+  useBatchDeleteConsultations,
   getListConsultationsQueryKey,
   type Consultation,
 } from '@workspace/api-client-react';
@@ -29,8 +30,11 @@ export function useConsultations(patientId?: string) {
   const update = useUpdateConsultation({ mutation: { onSuccess: invalidate } });
   const remove = useDeleteConsultation({ mutation: { onSuccess: invalidate } });
   const removeAll = useDeleteAllConsultations({ mutation: { onSuccess: invalidate } });
+  // One request for the whole selection: deleting ten notes one at a time is
+  // ten round trips, which is what made it feel slow.
+  const removeMany = useBatchDeleteConsultations({ mutation: { onSuccess: invalidate } });
 
   const consultations: Consultation[] = query.data ?? [];
 
-  return { consultations, query, create, update, remove, removeAll };
+  return { consultations, query, create, update, remove, removeAll, removeMany };
 }

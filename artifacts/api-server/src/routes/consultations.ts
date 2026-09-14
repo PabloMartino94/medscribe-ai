@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
+  BatchDeleteConsultationsBody,
+  BatchDeleteConsultationsResponse,
   CreateConsultationBody,
   CreateConsultationResponse,
   DeleteAllConsultationsResponse,
@@ -123,6 +125,35 @@ router.delete("/consultations", async (req, res) => {
   await removeRecordings(supabase, rows.map((r) => r.audio_path));
 
   res.json(DeleteAllConsultationsResponse.parse({ deleted: rows.length }));
+});
+
+router.post("/consultations/batch-delete", async (req, res) => {
+  const { supabase } = authed(req);
+
+  const parsed = BatchDeleteConsultationsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Lista de consultas inválida" });
+    return;
+  }
+
+  // Deleting and returning in one statement gives the count and the object keys
+  // together — the whole point is to replace N round trips with one.
+  const { data, error } = await supabase
+    .from("consultations")
+    .delete()
+    .in("id", parsed.data.ids)
+    .select("audio_path");
+
+  if (error) {
+    req.log.error({ err: error }, "Failed to batch delete consultations");
+    res.status(502).json({ error: "No se pudieron borrar las consultas" });
+    return;
+  }
+
+  const rows = (data ?? []) as Array<{ audio_path: string | null }>;
+  await removeRecordings(supabase, rows.map((r) => r.audio_path));
+
+  res.json(BatchDeleteConsultationsResponse.parse({ deleted: rows.length }));
 });
 
 router.get("/consultations/:id", async (req, res) => {

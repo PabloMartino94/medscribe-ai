@@ -381,6 +381,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeletedCount"
+  /consultations/batch-delete:
+    post:
+      operationId: batchDeleteConsultations
+      tags: [consultations]
+      summary: Delete several consultations and their recordings in one request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchDeleteInput"
+      responses:
+        "200":
+          description: Number of consultations deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedCount"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /consultations/{id}:
     parameters:
       - name: id
@@ -644,6 +668,18 @@ components:
           description: Standing style instructions applied to every note
           items:
             type: string
+    BatchDeleteInput:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          description: Consultations to delete; anything not the caller's own is ignored
+          minItems: 1
+          maxItems: 200
+          items:
+            type: string
+            format: uuid
     DeletedCount:
       type: object
       required: [deleted]

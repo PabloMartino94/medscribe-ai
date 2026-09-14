@@ -370,6 +370,22 @@ export const DeleteAllConsultationsResponse = zod.object({
 
 
 /**
+ * @summary Delete several consultations and their recordings in one request
+ */
+export const batchDeleteConsultationsBodyIdsMax = 200;
+
+
+
+export const BatchDeleteConsultationsBody = zod.object({
+  "ids": zod.array(zod.string().uuid()).min(1).max(batchDeleteConsultationsBodyIdsMax).describe('Consultations to delete; anything not the caller\'s own is ignored')
+})
+
+export const BatchDeleteConsultationsResponse = zod.object({
+  "deleted": zod.number().int()
+})
+
+
+/**
  * @summary Fetch one consultation
  */
 export const GetConsultationParams = zod.object({

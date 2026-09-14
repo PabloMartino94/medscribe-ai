@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 type RefineScope = "note" | "global";
-import { Mic, Square, Loader2, Pause, Play, Settings2, Trash2, FileAudio, Stethoscope, Send, X, LogOut } from "lucide-react";
+import { Mic, Square, Loader2, Pause, Play, Settings2, Trash2, FileAudio, Stethoscope, Send, X, LogOut, CheckSquare } from "lucide-react";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useConsultations } from "@/hooks/use-consultations";
@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -75,9 +76,47 @@ export default function Home() {
 
   // Server-backed history and standing preferences. With a patient selected the
   // history is that patient's timeline instead of everything.
-  const { consultations, create, update, remove, removeAll } = useConsultations(
+  const { consultations, create, update, remove, removeAll, removeMany } = useConsultations(
     selectedPatient?.id,
   );
+
+  // Bulk selection in the history. Ids rather than indexes: the list refetches
+  // after every change, and a position would then point at a different note.
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const exitSelection = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Anything selected that is no longer listed was deleted elsewhere; keeping
+  // it would send ids that no longer exist.
+  const visibleSelected = consultations.filter((c) => selectedIds.has(c.id));
+  const allVisibleSelected =
+    consultations.length > 0 && visibleSelected.length === consultations.length;
+
+  const deleteSelected = async () => {
+    const ids = visibleSelected.map((c) => c.id);
+    if (ids.length === 0) return;
+    try {
+      const { deleted } = await removeMany.mutateAsync({ data: { ids } });
+      setCurrentNote((prev) => (prev && ids.includes(prev.id) ? null : prev));
+      exitSelection();
+      toast({ title: deleted === 1 ? "Se borró 1 consulta" : `Se borraron ${deleted} consultas` });
+    } catch (err) {
+      toast({ title: "No se pudieron borrar", description: errorMessage(err, "Reintentá en unos segundos"), variant: "destructive" });
+    }
+  };
   const { preferences, addPreference, removePreference } = usePreferences();
 
   // Refinement chat
@@ -474,31 +513,77 @@ export default function Home() {
           <h4 className="font-semibold text-sm tracking-tight text-muted-foreground uppercase">
             {selectedPatient ? `Visitas de ${selectedPatient.initials}` : "Historial"}
           </h4>
-          {consultations.length > 0 && !selectedPatient && (
+          {consultations.length > 0 && (
+            selecting ? (
+              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={exitSelection}>
+                Cancelar
+              </Button>
+            ) : (
+              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setSelecting(true)}>
+                <CheckSquare className="w-4 h-4 mr-1" />
+                Seleccionar
+              </Button>
+            )
+          )}
+        </div>
+
+        {selecting && consultations.length > 0 && (
+          <div className="flex items-center justify-between gap-2 bg-muted/30 p-2 rounded-lg border border-border/50">
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() =>
+                setSelectedIds(
+                  allVisibleSelected ? new Set() : new Set(consultations.map((c) => c.id)),
+                )
+              }
+            >
+              {allVisibleSelected ? "Ninguna" : "Todas"}
+            </button>
+
+            <span className="text-xs text-muted-foreground">
+              {visibleSelected.length} de {consultations.length}
+            </span>
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 text-destructive">
-                  <Trash2 className="w-4 h-4 mr-1" />
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={visibleSelected.length === 0 || removeMany.isPending}
+                >
+                  {removeMany.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  )}
                   Borrar
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>¿Borrar todo el historial?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {visibleSelected.length === 1
+                      ? "¿Borrar 1 consulta?"
+                      : `¿Borrar ${visibleSelected.length} consultas?`}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    Se eliminarán permanentemente las {consultations.length} consultas guardadas en tu cuenta, junto con sus grabaciones. No se puede deshacer.
+                    Se eliminan también sus grabaciones. No se puede deshacer.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => void clearAllHistory()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Borrar todo
+                  <AlertDialogAction
+                    onClick={() => void deleteSelected()}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Borrar
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          )}
-        </div>
+          </div>
+        )}
 
         {consultations.length === 0 ? (
           <p className="text-sm text-muted-foreground">
@@ -513,11 +598,23 @@ export default function Home() {
                 key={note.id}
                 className={cn(
                   "flex items-start rounded-lg border transition-colors hover:bg-muted/50",
-                  currentNote?.id === note.id ? "border-primary bg-primary/5" : "border-transparent bg-muted/20"
+                  selecting && selectedIds.has(note.id)
+                    ? "border-destructive/60 bg-destructive/5"
+                    : currentNote?.id === note.id
+                      ? "border-primary bg-primary/5"
+                      : "border-transparent bg-muted/20"
                 )}
               >
+                {selecting && (
+                  <Checkbox
+                    aria-label={`Seleccionar ${note.title || "consulta"}`}
+                    checked={selectedIds.has(note.id)}
+                    onCheckedChange={() => toggleSelected(note.id)}
+                    className="ml-3 mt-3.5 shrink-0"
+                  />
+                )}
                 <button
-                  onClick={() => loadHistoryNote(note)}
+                  onClick={() => (selecting ? toggleSelected(note.id) : loadHistoryNote(note))}
                   className="flex-1 text-left p-3 min-w-0"
                 >
                   <div className="font-medium text-sm truncate">{note.title || "Sin título"}</div>
@@ -526,19 +623,57 @@ export default function Home() {
                     <span className="shrink-0">{new Date(note.createdAt).toLocaleDateString()}</span>
                   </div>
                 </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Borrar consulta"
-                  className="h-7 w-7 m-2 text-muted-foreground hover:text-destructive shrink-0"
-                  onClick={() => void deleteNote(note.id)}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
+                {!selecting && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Borrar consulta"
+                    className="h-7 w-7 m-2 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => void deleteNote(note.id)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             ))}
           </div>
         )}
+        {/* The selector only reaches what is listed, and the list is capped.
+            Wiping the account is a different, rarer action, so it lives apart
+            from the per-row crosses and from the bulk "Borrar". With a patient
+            open it is hidden: next to "Visitas de J.P." it would read as
+            deleting only that patient's notes, and it deletes every note. */}
+        {!selecting && !selectedPatient && consultations.length > 0 && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button
+                className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                disabled={removeAll.isPending}
+              >
+                {removeAll.isPending ? "Borrando..." : "Borrar todo el historial"}
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Borrar todo el historial?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Se borran todas tus consultas y sus grabaciones, incluidas las de tus
+                  pacientes internados y las que no se ven en esta lista. No se puede deshacer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => void clearAllHistory()}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Borrar todo
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+
         <p className="text-xs text-muted-foreground pt-2 border-t leading-relaxed">
           {selectedPatient
             ? "Lo que grabes ahora se suma a las visitas de este paciente."

@@ -128,6 +128,15 @@ export interface Preferences {
   preferences: string[];
 }
 
+export interface BatchDeleteInput {
+  /**
+     * Consultations to delete; anything not the caller's own is ignored
+     * @minItems 1
+     * @maxItems 200
+     */
+  ids: string[];
+}
+
 export interface DeletedCount {
   deleted: number;
 }

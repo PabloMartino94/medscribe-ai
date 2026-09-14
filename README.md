@@ -79,7 +79,9 @@ Dos detalles que parecen menores y no lo son:
   muestra como el día anterior.
 - Con un paciente seleccionado no se ofrece "borrar el historial": ese endpoint
   limpia la cuenta entera, y el botón al lado de "Visitas de J.P." se leería
-  como que borra solo las de ese paciente.
+  como que borra solo las de ese paciente. Para borrar varias notas de una vez
+  está el selector del historial ("Seleccionar"), que manda los ids elegidos en
+  un solo pedido en lugar de uno por nota.
 
 ## Privacidad y seguridad
 
