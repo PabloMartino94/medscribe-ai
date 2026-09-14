@@ -38,9 +38,12 @@ router.get("/consultations", async (req, res) => {
     return;
   }
 
-  const { data, error } = await supabase
-    .from("consultations")
-    .select(CONSULTATION_COLUMNS)
+  let query = supabase.from("consultations").select(CONSULTATION_COLUMNS);
+
+  // Scoping to a patient turns the history panel into that patient's timeline.
+  if (params.data.patientId) query = query.eq("patient_id", params.data.patientId);
+
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(params.data.limit);
 
@@ -65,12 +68,14 @@ router.post("/consultations", async (req, res) => {
     res.status(400).json({ error: "Datos inválidos: se requiere la nota estructurada" });
     return;
   }
-  const { note, patientRef, transcript, audioPath, audioDurationSeconds } = parsed.data;
+  const { note, patientId, patientRef, transcript, audioPath, audioDurationSeconds } =
+    parsed.data;
 
   const { data, error } = await supabase
     .from("consultations")
     .insert({
       user_id: user.id,
+      patient_id: patientId ?? null,
       patient_ref: patientRef ?? null,
       template: note.template,
       title: note.title,

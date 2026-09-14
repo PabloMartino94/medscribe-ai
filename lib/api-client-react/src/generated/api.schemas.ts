@@ -152,12 +152,15 @@ export interface Consultation {
   /** Object key of the recording in the private storage bucket */
   audioPath?: string | null;
   audioDurationSeconds?: number | null;
+  /** The patient this note belongs to, when it belongs to one */
+  patientId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface ConsultationInput {
   note: StructuredNote;
+  patientId?: string;
   patientRef?: string;
   transcript?: string;
   audioPath?: string;
@@ -169,11 +172,79 @@ export interface ConsultationUpdate {
   patientRef?: string;
 }
 
+export interface Patient {
+  id: string;
+  /** Minimal identity, e.g. "J.P." — capped at 16 characters */
+  initials: string;
+  /** Bed or room, as the physician would look for it */
+  bed?: string | null;
+  /** Admission date as YYYY-MM-DD; deliberately not a timestamp */
+  admittedOn?: string | null;
+  /** Reason for admission */
+  reason?: string | null;
+  /** Null while still under care */
+  dischargedAt?: string | null;
+  /** How many notes this patient has */
+  noteCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PatientInput {
+  /**
+     * @minLength 1
+     * @maxLength 16
+     */
+  initials: string;
+  /** @maxLength 32 */
+  bed?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  admittedOn?: string;
+  /** @maxLength 300 */
+  reason?: string;
+}
+
+export interface PatientUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 16
+     */
+  initials?: string;
+  /** @maxLength 32 */
+  bed?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  admittedOn?: string;
+  /** @maxLength 300 */
+  reason?: string;
+  /** True discharges the patient, false readmits them */
+  discharged?: boolean;
+}
+
+export type ListPatientsParams = {
+/**
+ * Which patients to return; defaults to those still admitted
+ */
+status?: ListPatientsStatus;
+};
+
+export type ListPatientsStatus = typeof ListPatientsStatus[keyof typeof ListPatientsStatus];
+
+
+export const ListPatientsStatus = {
+  active: 'active',
+  discharged: 'discharged',
+  all: 'all',
+} as const;
+
 export type ListConsultationsParams = {
 /**
  * @minimum 1
  * @maximum 200
  */
 limit?: number;
+/**
+ * Only this patient's consultations
+ */
+patientId?: string;
 };
 

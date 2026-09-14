@@ -16,6 +16,7 @@ import {
   useTranscribeAudio,
   useRefineNote,
   type Consultation,
+  type Patient,
   type StructuredNote,
 } from "@workspace/api-client-react";
 
@@ -30,6 +31,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Drawer, DrawerContent, DrawerTrigger, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { CopyButton } from "@/components/copy-button";
+import { PatientPanel } from "@/components/patient-panel";
+import { PatientBar } from "@/components/patient-bar";
 import { RecordingPlayer } from "@/components/recording-player";
 import { useTheme } from "@/components/theme-provider";
 
@@ -60,6 +63,7 @@ export default function Home() {
   const [selectedTemplateId, setSelectedTemplateId] = useLocalStorage<string>("medscribe-template", "soap");
   const [autoAnonymize, setAutoAnonymize] = useLocalStorage<boolean>("medscribe-anonymize", false);
   const [keepAudio, setKeepAudio] = useLocalStorage<boolean>("medscribe-keep-audio", true);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [currentNote, setCurrentNote] = useState<Consultation | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -69,8 +73,11 @@ export default function Home() {
   // Recording captured by the last transcription, attached to the next note saved.
   const pendingAudioRef = useRef<{ audioPath?: string; durationSeconds?: number }>({});
 
-  // Server-backed history and standing preferences.
-  const { consultations, create, update, remove, removeAll } = useConsultations();
+  // Server-backed history and standing preferences. With a patient selected the
+  // history is that patient's timeline instead of everything.
+  const { consultations, create, update, remove, removeAll } = useConsultations(
+    selectedPatient?.id,
+  );
   const { preferences, addPreference, removePreference } = usePreferences();
 
   // Refinement chat
@@ -108,6 +115,7 @@ export default function Home() {
             data: {
               note,
               transcript: text.trim() || undefined,
+              ...(selectedPatient ? { patientId: selectedPatient.id } : {}),
               ...(pendingAudio.audioPath ? { audioPath: pendingAudio.audioPath } : {}),
               ...(pendingAudio.durationSeconds ? { audioDurationSeconds: pendingAudio.durationSeconds } : {}),
             },
@@ -179,6 +187,7 @@ export default function Home() {
             data: {
               note,
               ...(transcript ? { transcript } : {}),
+              ...(selectedPatient ? { patientId: selectedPatient.id } : {}),
               // The recording stays with the note it was made for: two rows
               // pointing at one object would delete each other's audio.
             },
@@ -353,6 +362,16 @@ export default function Home() {
     }
   };
 
+  const selectPatient = (patient: Patient | null) => {
+    setSelectedPatient(patient);
+    // The open note belongs to whoever was selected before; leaving it on
+    // screen under a new patient's header is how notes end up misattributed.
+    setCurrentNote(null);
+    setChatMessages([]);
+    setText("");
+    pendingAudioRef.current = {};
+  };
+
   const loadHistoryNote = (note: Consultation) => {
     setCurrentNote(note);
     // Raw setter on purpose: opening a note must not regenerate it.
@@ -364,7 +383,9 @@ export default function Home() {
   // Sub-components
   const renderSettingsPanel = () => (
     <div className="space-y-6">
-      <div className="space-y-4">
+      <PatientPanel selectedId={selectedPatient?.id ?? null} onSelect={selectPatient} />
+
+      <div className="space-y-4 pt-2 border-t">
         <h4 className="font-semibold text-sm tracking-tight text-muted-foreground uppercase">Ajustes</h4>
 
         <div className="flex items-center justify-between">
@@ -450,8 +471,10 @@ export default function Home() {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h4 className="font-semibold text-sm tracking-tight text-muted-foreground uppercase">Historial</h4>
-          {consultations.length > 0 && (
+          <h4 className="font-semibold text-sm tracking-tight text-muted-foreground uppercase">
+            {selectedPatient ? `Visitas de ${selectedPatient.initials}` : "Historial"}
+          </h4>
+          {consultations.length > 0 && !selectedPatient && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 text-destructive">
@@ -478,7 +501,11 @@ export default function Home() {
         </div>
 
         {consultations.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No hay consultas guardadas.</p>
+          <p className="text-sm text-muted-foreground">
+            {selectedPatient
+              ? "Todavía no hay visitas para este paciente."
+              : "No hay consultas guardadas."}
+          </p>
         ) : (
           <div className="space-y-2">
             {consultations.map(note => (
@@ -513,7 +540,9 @@ export default function Home() {
           </div>
         )}
         <p className="text-xs text-muted-foreground pt-2 border-t leading-relaxed">
-          Tus consultas se guardan en tu cuenta y solo vos podés verlas.
+          {selectedPatient
+            ? "Lo que grabes ahora se suma a las visitas de este paciente."
+            : "Tus consultas se guardan en tu cuenta y solo vos podés verlas."}
         </p>
       </div>
 
@@ -680,6 +709,10 @@ export default function Home() {
             </DrawerContent>
           </Drawer>
         </div>
+
+        {selectedPatient && (
+          <PatientBar patient={selectedPatient} onClear={() => selectPatient(null)} />
+        )}
 
         {/* MAIN SCROLL AREA */}
         <ScrollArea className="flex-1 px-4 md:px-8 py-6 pb-36 md:pb-6">

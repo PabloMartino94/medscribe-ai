@@ -22,6 +22,8 @@ export interface Consultation {
   /** Object key of the recording in the private storage bucket */
   audioPath?: string | null;
   audioDurationSeconds?: number | null;
+  /** The patient this note belongs to, when it belongs to one */
+  patientId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -5,13 +5,11 @@
  * MedScribe AI API — transcription, clinical structuring and per-physician storage of consultations. Every endpoint except /healthz and /templates requires a Supabase access token and only ever sees the caller's own rows.
  * OpenAPI spec version: 0.1.0
  */
-import type { StructuredNote } from './structuredNote';
+import type { ListPatientsStatus } from './listPatientsStatus';
 
-export interface ConsultationInput {
-  note: StructuredNote;
-  patientId?: string;
-  patientRef?: string;
-  transcript?: string;
-  audioPath?: string;
-  audioDurationSeconds?: number;
-}
+export type ListPatientsParams = {
+/**
+ * Which patients to return; defaults to those still admitted
+ */
+status?: ListPatientsStatus;
+};

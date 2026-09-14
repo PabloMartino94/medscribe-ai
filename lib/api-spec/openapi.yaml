@@ -21,6 +21,8 @@ tags:
     description: Clinical note processing
   - name: audio
     description: Audio transcription
+  - name: patients
+    description: Inpatients under the physician's care
   - name: consultations
     description: Stored clinical consultations
   - name: preferences
@@ -210,6 +212,111 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Preferences"
+  /patients:
+    get:
+      operationId: listPatients
+      tags: [patients]
+      summary: List the physician's patients
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Which patients to return; defaults to those still admitted
+          schema:
+            type: string
+            enum: [active, discharged, all]
+            default: active
+      responses:
+        "200":
+          description: Patients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Patient"
+    post:
+      operationId: createPatient
+      tags: [patients]
+      summary: Admit a patient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatientInput"
+      responses:
+        "201":
+          description: Created patient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /patients/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getPatient
+      tags: [patients]
+      summary: Fetch one patient
+      responses:
+        "200":
+          description: Patient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updatePatient
+      tags: [patients]
+      summary: Update a patient, or discharge and readmit them
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatientUpdate"
+      responses:
+        "200":
+          description: Updated patient
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deletePatient
+      tags: [patients]
+      summary: Delete a patient with every note and recording of theirs
+      responses:
+        "200":
+          description: Number of patients deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedCount"
   /consultations:
     get:
       operationId: listConsultations
@@ -224,6 +331,13 @@ paths:
             minimum: 1
             maximum: 200
             default: 50
+        - name: patientId
+          in: query
+          required: false
+          description: Only this patient's consultations
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
           description: Consultations
@@ -580,6 +694,11 @@ components:
         audioDurationSeconds:
           type: number
           nullable: true
+        patientId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The patient this note belongs to, when it belongs to one
         createdAt:
           type: string
           format: date-time
@@ -592,6 +711,9 @@ components:
       properties:
         note:
           $ref: "#/components/schemas/StructuredNote"
+        patientId:
+          type: string
+          format: uuid
         patientRef:
           type: string
         transcript:
@@ -607,3 +729,75 @@ components:
           $ref: "#/components/schemas/StructuredNote"
         patientRef:
           type: string
+    Patient:
+      type: object
+      required: [id, initials, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        initials:
+          type: string
+          description: Minimal identity, e.g. "J.P." — capped at 16 characters
+        bed:
+          type: string
+          nullable: true
+          description: Bed or room, as the physician would look for it
+        admittedOn:
+          type: string
+          nullable: true
+          description: Admission date as YYYY-MM-DD; deliberately not a timestamp
+        reason:
+          type: string
+          nullable: true
+          description: Reason for admission
+        dischargedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null while still under care
+        noteCount:
+          type: integer
+          description: How many notes this patient has
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PatientInput:
+      type: object
+      required: [initials]
+      properties:
+        initials:
+          type: string
+          minLength: 1
+          maxLength: 16
+        bed:
+          type: string
+          maxLength: 32
+        admittedOn:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        reason:
+          type: string
+          maxLength: 300
+    PatientUpdate:
+      type: object
+      properties:
+        initials:
+          type: string
+          minLength: 1
+          maxLength: 16
+        bed:
+          type: string
+          maxLength: 32
+        admittedOn:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        reason:
+          type: string
+          maxLength: 300
+        discharged:
+          type: boolean
+          description: True discharges the patient, false readmits them

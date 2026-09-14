@@ -59,6 +59,28 @@ Dos límites que conviene tener presentes:
   hay que ir consultando hasta que termine. Intentarlo como una sola llamada
   colgaba el pedido. Queda pendiente.
 
+## Pacientes internados
+
+Además de la consulta suelta, la app sigue pacientes a lo largo de varios días.
+Se agrega un paciente, se lo selecciona, y cada nota que se graba se suma a su
+línea de tiempo. **Dar de alta** lo saca de la lista de internados sin borrar
+nada; borrarlo sí elimina sus notas y grabaciones.
+
+La identidad es deliberadamente mínima: iniciales, cama y motivo de
+internación. El límite de 16 caracteres en las iniciales está en la base
+(`check` sobre la columna), no solo en el formulario, así que un nombre
+completo no entra. La identificación formal vive en la historia clínica del
+hospital, que es donde corresponde.
+
+Dos detalles que parecen menores y no lo son:
+
+- `admitted_on` es una fecha sin hora y viaja como texto `YYYY-MM-DD`. Como
+  timestamp se convertiría en medianoche UTC, que al oeste de Greenwich se
+  muestra como el día anterior.
+- Con un paciente seleccionado no se ofrece "borrar el historial": ese endpoint
+  limpia la cuenta entera, y el botón al lado de "Visitas de J.P." se leería
+  como que borra solo las de ese paciente.
+
 ## Privacidad y seguridad
 
 Esta app guarda datos de salud, así que el aislamiento entre profesionales no
@@ -124,9 +146,12 @@ supabase link --project-ref <ref>
 supabase db push
 ```
 
-Tablas: `profiles` (nombre y preferencias de estilo, sin datos clínicos) y
-`consultations` (la nota estructurada, su transcripción y el puntero al audio).
-Un trigger en `auth.users` crea el perfil al registrarse.
+Tablas: `profiles` (nombre y preferencias de estilo, sin datos clínicos),
+`patients` (iniciales, cama, motivo y fecha de alta) y `consultations` (la nota
+estructurada, su transcripción, el puntero al audio y el paciente al que
+pertenece, si pertenece a alguno). Un trigger en `auth.users` crea el perfil al
+registrarse. Borrar un paciente cascadea a sus notas, y la API borra además sus
+grabaciones, que viven fuera de Postgres y no cascadean solas.
 
 ## Despliegue en Render
 

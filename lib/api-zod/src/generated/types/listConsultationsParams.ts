@@ -12,4 +12,8 @@ export type ListConsultationsParams = {
  * @maximum 200
  */
 limit?: number;
+/**
+ * Only this patient's consultations
+ */
+patientId?: string;
 };

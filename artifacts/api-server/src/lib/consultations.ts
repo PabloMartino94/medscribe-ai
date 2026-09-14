@@ -14,13 +14,14 @@ export type ConsultationRow = {
   transcript: string | null;
   audio_path: string | null;
   audio_duration_seconds: number | string | null;
+  patient_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export const CONSULTATION_COLUMNS =
   "id, patient_ref, template, title, sections, plain_text, anonymized, " +
-  "transcript, audio_path, audio_duration_seconds, created_at, updated_at";
+  "transcript, audio_path, audio_duration_seconds, patient_id, created_at, updated_at";
 
 export function rowToConsultation(row: ConsultationRow): Consultation {
   return {
@@ -36,6 +37,7 @@ export function rowToConsultation(row: ConsultationRow): Consultation {
     // `numeric` comes back as a string from postgres-js; normalise to a number.
     audioDurationSeconds:
       row.audio_duration_seconds === null ? null : Number(row.audio_duration_seconds),
+    patientId: row.patient_id,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };

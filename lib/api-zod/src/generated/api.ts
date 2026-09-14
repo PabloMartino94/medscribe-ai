@@ -162,6 +162,130 @@ export const SetPreferencesResponse = zod.object({
 
 
 /**
+ * @summary List the physician's patients
+ */
+export const listPatientsQueryStatusDefault = `active`;
+
+export const ListPatientsQueryParams = zod.object({
+  "status": zod.enum(['active', 'discharged', 'all']).default(listPatientsQueryStatusDefault).describe('Which patients to return; defaults to those still admitted')
+})
+
+export const ListPatientsResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "initials": zod.string().describe('Minimal identity, e.g. "J.P." — capped at 16 characters'),
+  "bed": zod.string().nullish().describe('Bed or room, as the physician would look for it'),
+  "admittedOn": zod.string().nullish().describe('Admission date as YYYY-MM-DD; deliberately not a timestamp'),
+  "reason": zod.string().nullish().describe('Reason for admission'),
+  "dischargedAt": zod.coerce.date().nullish().describe('Null while still under care'),
+  "noteCount": zod.number().int().optional().describe('How many notes this patient has'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListPatientsResponse = zod.array(ListPatientsResponseItem)
+
+
+/**
+ * @summary Admit a patient
+ */
+export const createPatientBodyInitialsMax = 16;
+
+export const createPatientBodyBedMax = 32;
+
+export const createPatientBodyAdmittedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createPatientBodyReasonMax = 300;
+
+
+
+export const CreatePatientBody = zod.object({
+  "initials": zod.string().min(1).max(createPatientBodyInitialsMax),
+  "bed": zod.string().max(createPatientBodyBedMax).optional(),
+  "admittedOn": zod.string().regex(createPatientBodyAdmittedOnRegExp).optional(),
+  "reason": zod.string().max(createPatientBodyReasonMax).optional()
+})
+
+export const CreatePatientResponse = zod.object({
+  "id": zod.string().uuid(),
+  "initials": zod.string().describe('Minimal identity, e.g. "J.P." — capped at 16 characters'),
+  "bed": zod.string().nullish().describe('Bed or room, as the physician would look for it'),
+  "admittedOn": zod.string().nullish().describe('Admission date as YYYY-MM-DD; deliberately not a timestamp'),
+  "reason": zod.string().nullish().describe('Reason for admission'),
+  "dischargedAt": zod.coerce.date().nullish().describe('Null while still under care'),
+  "noteCount": zod.number().int().optional().describe('How many notes this patient has'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Fetch one patient
+ */
+export const GetPatientParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+export const GetPatientResponse = zod.object({
+  "id": zod.string().uuid(),
+  "initials": zod.string().describe('Minimal identity, e.g. "J.P." — capped at 16 characters'),
+  "bed": zod.string().nullish().describe('Bed or room, as the physician would look for it'),
+  "admittedOn": zod.string().nullish().describe('Admission date as YYYY-MM-DD; deliberately not a timestamp'),
+  "reason": zod.string().nullish().describe('Reason for admission'),
+  "dischargedAt": zod.coerce.date().nullish().describe('Null while still under care'),
+  "noteCount": zod.number().int().optional().describe('How many notes this patient has'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a patient, or discharge and readmit them
+ */
+export const UpdatePatientParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+export const updatePatientBodyInitialsMax = 16;
+
+export const updatePatientBodyBedMax = 32;
+
+export const updatePatientBodyAdmittedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updatePatientBodyReasonMax = 300;
+
+
+
+export const UpdatePatientBody = zod.object({
+  "initials": zod.string().min(1).max(updatePatientBodyInitialsMax).optional(),
+  "bed": zod.string().max(updatePatientBodyBedMax).optional(),
+  "admittedOn": zod.string().regex(updatePatientBodyAdmittedOnRegExp).optional(),
+  "reason": zod.string().max(updatePatientBodyReasonMax).optional(),
+  "discharged": zod.boolean().optional().describe('True discharges the patient, false readmits them')
+})
+
+export const UpdatePatientResponse = zod.object({
+  "id": zod.string().uuid(),
+  "initials": zod.string().describe('Minimal identity, e.g. "J.P." — capped at 16 characters'),
+  "bed": zod.string().nullish().describe('Bed or room, as the physician would look for it'),
+  "admittedOn": zod.string().nullish().describe('Admission date as YYYY-MM-DD; deliberately not a timestamp'),
+  "reason": zod.string().nullish().describe('Reason for admission'),
+  "dischargedAt": zod.coerce.date().nullish().describe('Null while still under care'),
+  "noteCount": zod.number().int().optional().describe('How many notes this patient has'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a patient with every note and recording of theirs
+ */
+export const DeletePatientParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+export const DeletePatientResponse = zod.object({
+  "deleted": zod.number().int()
+})
+
+
+/**
  * @summary List the authenticated physician's consultations, newest first
  */
 export const listConsultationsQueryLimitDefault = 50;
@@ -170,7 +294,8 @@ export const listConsultationsQueryLimitMax = 200;
 
 
 export const ListConsultationsQueryParams = zod.object({
-  "limit": zod.coerce.number().int().min(1).max(listConsultationsQueryLimitMax).default(listConsultationsQueryLimitDefault)
+  "limit": zod.coerce.number().int().min(1).max(listConsultationsQueryLimitMax).default(listConsultationsQueryLimitDefault),
+  "patientId": zod.coerce.string().uuid().optional().describe('Only this patient\'s consultations')
 })
 
 export const ListConsultationsResponseItem = zod.object({
@@ -187,6 +312,7 @@ export const ListConsultationsResponseItem = zod.object({
   "transcript": zod.string().nullish().describe('Raw transcript the note was generated from'),
   "audioPath": zod.string().nullish().describe('Object key of the recording in the private storage bucket'),
   "audioDurationSeconds": zod.number().nullish(),
+  "patientId": zod.string().uuid().nullish().describe('The patient this note belongs to, when it belongs to one'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -208,6 +334,7 @@ export const CreateConsultationBody = zod.object({
   "anonymized": zod.boolean().optional(),
   "processedAt": zod.coerce.date()
 }),
+  "patientId": zod.string().uuid().optional(),
   "patientRef": zod.string().optional(),
   "transcript": zod.string().optional(),
   "audioPath": zod.string().optional(),
@@ -228,6 +355,7 @@ export const CreateConsultationResponse = zod.object({
   "transcript": zod.string().nullish().describe('Raw transcript the note was generated from'),
   "audioPath": zod.string().nullish().describe('Object key of the recording in the private storage bucket'),
   "audioDurationSeconds": zod.number().nullish(),
+  "patientId": zod.string().uuid().nullish().describe('The patient this note belongs to, when it belongs to one'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -262,6 +390,7 @@ export const GetConsultationResponse = zod.object({
   "transcript": zod.string().nullish().describe('Raw transcript the note was generated from'),
   "audioPath": zod.string().nullish().describe('Object key of the recording in the private storage bucket'),
   "audioDurationSeconds": zod.number().nullish(),
+  "patientId": zod.string().uuid().nullish().describe('The patient this note belongs to, when it belongs to one'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -303,6 +432,7 @@ export const UpdateConsultationResponse = zod.object({
   "transcript": zod.string().nullish().describe('Raw transcript the note was generated from'),
   "audioPath": zod.string().nullish().describe('Object key of the recording in the private storage bucket'),
   "audioDurationSeconds": zod.number().nullish(),
+  "patientId": zod.string().uuid().nullish().describe('The patient this note belongs to, when it belongs to one'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
