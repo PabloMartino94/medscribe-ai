@@ -61,6 +61,8 @@ export interface NoteInput {
   anonymize?: boolean;
   /** Standing style instructions the physician wants applied to every note */
   preferences?: string[];
+  /** Whose note this is. The server loads that patient's clinical context and gives it to the model as background for the note. */
+  patientId?: string;
 }
 
 export interface NoteSection {
@@ -181,6 +183,69 @@ export interface ConsultationUpdate {
   patientRef?: string;
 }
 
+/**
+ * Clinically relevant for reference ranges and dosing
+ */
+export type PatientSex = typeof PatientSex[keyof typeof PatientSex] | null;
+
+
+export const PatientSex = {
+  F: 'F',
+  M: 'M',
+  X: 'X',
+} as const;
+
+export type FeedbackKind = typeof FeedbackKind[keyof typeof FeedbackKind];
+
+
+export const FeedbackKind = {
+  bug: 'bug',
+  improvement: 'improvement',
+} as const;
+
+export type FeedbackStatus = typeof FeedbackStatus[keyof typeof FeedbackStatus];
+
+
+export const FeedbackStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  done: 'done',
+  discarded: 'discarded',
+} as const;
+
+export interface FeedbackItem {
+  id: string;
+  kind: FeedbackKind;
+  title: string;
+  detail?: string | null;
+  status: FeedbackStatus;
+  authorName?: string | null;
+  /** Whether the caller reported this one, and so may delete it */
+  mine: boolean;
+  /** Browser and device the report was filed from */
+  client?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeedbackInput {
+  kind: FeedbackKind;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title: string;
+  /** @maxLength 4000 */
+  detail?: string;
+  /** @maxLength 300 */
+  client?: string;
+}
+
+export interface FeedbackStatusUpdate {
+  status: FeedbackStatus;
+}
+
 export interface Patient {
   id: string;
   /** Minimal identity, e.g. "J.P." — capped at 16 characters */
@@ -191,6 +256,16 @@ export interface Patient {
   admittedOn?: string | null;
   /** Reason for admission */
   reason?: string | null;
+  ageYears?: number | null;
+  sex?: PatientSex | null;
+  weightKg?: number | null;
+  /** Active problem being treated, as opposed to the complaint at admission */
+  diagnosis?: string | null;
+  /** Past medical history — comorbidities, surgeries, habits */
+  history?: string | null;
+  allergies?: string | null;
+  /** Home and current medication */
+  medications?: string | null;
   /** Null while still under care */
   dischargedAt?: string | null;
   /** How many notes this patient has */
@@ -211,6 +286,25 @@ export interface PatientInput {
   admittedOn?: string;
   /** @maxLength 300 */
   reason?: string;
+  /**
+     * @minimum 0
+     * @maximum 130
+     */
+  ageYears?: number;
+  sex?: PatientSex | null;
+  /**
+     * @maximum 699
+     * @exclusiveMinimum 0
+     */
+  weightKg?: number;
+  /** @maxLength 300 */
+  diagnosis?: string;
+  /** @maxLength 2000 */
+  history?: string;
+  /** @maxLength 500 */
+  allergies?: string;
+  /** @maxLength 2000 */
+  medications?: string;
 }
 
 export interface PatientUpdate {
@@ -225,6 +319,25 @@ export interface PatientUpdate {
   admittedOn?: string;
   /** @maxLength 300 */
   reason?: string;
+  /**
+     * @minimum 0
+     * @maximum 130
+     */
+  ageYears?: number;
+  sex?: PatientSex | null;
+  /**
+     * @maximum 699
+     * @exclusiveMinimum 0
+     */
+  weightKg?: number;
+  /** @maxLength 300 */
+  diagnosis?: string;
+  /** @maxLength 2000 */
+  history?: string;
+  /** @maxLength 500 */
+  allergies?: string;
+  /** @maxLength 2000 */
+  medications?: string;
   /** True discharges the patient, false readmits them */
   discharged?: boolean;
 }
@@ -242,6 +355,24 @@ export type ListPatientsStatus = typeof ListPatientsStatus[keyof typeof ListPati
 export const ListPatientsStatus = {
   active: 'active',
   discharged: 'discharged',
+  all: 'all',
+} as const;
+
+export type ListFeedbackParams = {
+/**
+ * Filter by status; defaults to every item
+ */
+status?: ListFeedbackStatus;
+};
+
+export type ListFeedbackStatus = typeof ListFeedbackStatus[keyof typeof ListFeedbackStatus];
+
+
+export const ListFeedbackStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  done: 'done',
+  discarded: 'discarded',
   all: 'all',
 } as const;
 

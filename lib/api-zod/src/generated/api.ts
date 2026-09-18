@@ -64,7 +64,8 @@ export const StructureNoteBody = zod.object({
   "text": zod.string().min(1).describe('Raw transcript or dictation'),
   "template": zod.enum(['soap', 'evolucion', 'informe', 'receta']),
   "anonymize": zod.boolean().default(structureNoteBodyAnonymizeDefault).describe('Run the local anonymizer before sending the text to the AI'),
-  "preferences": zod.array(zod.string()).optional().describe('Standing style instructions the physician wants applied to every note')
+  "preferences": zod.array(zod.string()).optional().describe('Standing style instructions the physician wants applied to every note'),
+  "patientId": zod.string().uuid().optional().describe('Whose note this is. The server loads that patient\'s clinical context and gives it to the model as background for the note.')
 })
 
 export const StructureNoteResponse = zod.object({
@@ -176,6 +177,13 @@ export const ListPatientsResponseItem = zod.object({
   "bed": zod.string().nullish().describe('Bed or room, as the physician would look for it'),
   "admittedOn": zod.string().nullish().describe('Admission date as YYYY-MM-DD; deliberately not a timestamp'),
   "reason": zod.string().nullish().describe('Reason for admission'),
+  "ageYears": zod.number().int().nullish(),
+  "sex": zod.enum(['F', 'M', 'X']).nullish().describe('Clinically relevant for reference ranges and dosing'),
+  "weightKg": zod.number().nullish(),
+  "diagnosis": zod.string().nullish().describe('Active problem being treated, as opposed to the complaint at admission'),
+  "history": zod.string().nullish().describe('Past medical history — comorbidities, surgeries, habits'),
+  "allergies": zod.string().nullish(),
+  "medications": zod.string().nullish().describe('Home and current medication'),
   "dischargedAt": zod.coerce.date().nullish().describe('Null while still under care'),
   "noteCount": zod.number().int().optional().describe('How many notes this patient has'),
   "createdAt": zod.coerce.date(),
@@ -194,13 +202,34 @@ export const createPatientBodyBedMax = 32;
 export const createPatientBodyAdmittedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const createPatientBodyReasonMax = 300;
 
+export const createPatientBodyAgeYearsMin = 0;
+export const createPatientBodyAgeYearsMax = 130;
+
+export const createPatientBodyWeightKgExclusiveMin = 0;
+export const createPatientBodyWeightKgMax = 699;
+
+export const createPatientBodyDiagnosisMax = 300;
+
+export const createPatientBodyHistoryMax = 2000;
+
+export const createPatientBodyAllergiesMax = 500;
+
+export const createPatientBodyMedicationsMax = 2000;
+
 
 
 export const CreatePatientBody = zod.object({
   "initials": zod.string().min(1).max(createPatientBodyInitialsMax),
   "bed": zod.string().max(createPatientBodyBedMax).optional(),
   "admittedOn": zod.string().regex(createPatientBodyAdmittedOnRegExp).optional(),
-  "reason": zod.string().max(createPatientBodyReasonMax).optional()
+  "reason": zod.string().max(createPatientBodyReasonMax).optional(),
+  "ageYears": zod.number().int().min(createPatientBodyAgeYearsMin).max(createPatientBodyAgeYearsMax).optional(),
+  "sex": zod.enum(['F', 'M', 'X']).nullish().describe('Clinically relevant for reference ranges and dosing'),
+  "weightKg": zod.number().gt(createPatientBodyWeightKgExclusiveMin).max(createPatientBodyWeightKgMax).optional(),
+  "diagnosis": zod.string().max(createPatientBodyDiagnosisMax).optional(),
+  "history": zod.string().max(createPatientBodyHistoryMax).optional(),
+  "allergies": zod.string().max(createPatientBodyAllergiesMax).optional(),
+  "medications": zod.string().max(createPatientBodyMedicationsMax).optional()
 })
 
 export const CreatePatientResponse = zod.object({
@@ -209,6 +238,13 @@ export const CreatePatientResponse = zod.object({
   "bed": zod.string().nullish().describe('Bed or room, as the physician would look for it'),
   "admittedOn": zod.string().nullish().describe('Admission date as YYYY-MM-DD; deliberately not a timestamp'),
   "reason": zod.string().nullish().describe('Reason for admission'),
+  "ageYears": zod.number().int().nullish(),
+  "sex": zod.enum(['F', 'M', 'X']).nullish().describe('Clinically relevant for reference ranges and dosing'),
+  "weightKg": zod.number().nullish(),
+  "diagnosis": zod.string().nullish().describe('Active problem being treated, as opposed to the complaint at admission'),
+  "history": zod.string().nullish().describe('Past medical history — comorbidities, surgeries, habits'),
+  "allergies": zod.string().nullish(),
+  "medications": zod.string().nullish().describe('Home and current medication'),
   "dischargedAt": zod.coerce.date().nullish().describe('Null while still under care'),
   "noteCount": zod.number().int().optional().describe('How many notes this patient has'),
   "createdAt": zod.coerce.date(),
@@ -229,6 +265,13 @@ export const GetPatientResponse = zod.object({
   "bed": zod.string().nullish().describe('Bed or room, as the physician would look for it'),
   "admittedOn": zod.string().nullish().describe('Admission date as YYYY-MM-DD; deliberately not a timestamp'),
   "reason": zod.string().nullish().describe('Reason for admission'),
+  "ageYears": zod.number().int().nullish(),
+  "sex": zod.enum(['F', 'M', 'X']).nullish().describe('Clinically relevant for reference ranges and dosing'),
+  "weightKg": zod.number().nullish(),
+  "diagnosis": zod.string().nullish().describe('Active problem being treated, as opposed to the complaint at admission'),
+  "history": zod.string().nullish().describe('Past medical history — comorbidities, surgeries, habits'),
+  "allergies": zod.string().nullish(),
+  "medications": zod.string().nullish().describe('Home and current medication'),
   "dischargedAt": zod.coerce.date().nullish().describe('Null while still under care'),
   "noteCount": zod.number().int().optional().describe('How many notes this patient has'),
   "createdAt": zod.coerce.date(),
@@ -250,6 +293,20 @@ export const updatePatientBodyBedMax = 32;
 export const updatePatientBodyAdmittedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const updatePatientBodyReasonMax = 300;
 
+export const updatePatientBodyAgeYearsMin = 0;
+export const updatePatientBodyAgeYearsMax = 130;
+
+export const updatePatientBodyWeightKgExclusiveMin = 0;
+export const updatePatientBodyWeightKgMax = 699;
+
+export const updatePatientBodyDiagnosisMax = 300;
+
+export const updatePatientBodyHistoryMax = 2000;
+
+export const updatePatientBodyAllergiesMax = 500;
+
+export const updatePatientBodyMedicationsMax = 2000;
+
 
 
 export const UpdatePatientBody = zod.object({
@@ -257,6 +314,13 @@ export const UpdatePatientBody = zod.object({
   "bed": zod.string().max(updatePatientBodyBedMax).optional(),
   "admittedOn": zod.string().regex(updatePatientBodyAdmittedOnRegExp).optional(),
   "reason": zod.string().max(updatePatientBodyReasonMax).optional(),
+  "ageYears": zod.number().int().min(updatePatientBodyAgeYearsMin).max(updatePatientBodyAgeYearsMax).optional(),
+  "sex": zod.enum(['F', 'M', 'X']).nullish().describe('Clinically relevant for reference ranges and dosing'),
+  "weightKg": zod.number().gt(updatePatientBodyWeightKgExclusiveMin).max(updatePatientBodyWeightKgMax).optional(),
+  "diagnosis": zod.string().max(updatePatientBodyDiagnosisMax).optional(),
+  "history": zod.string().max(updatePatientBodyHistoryMax).optional(),
+  "allergies": zod.string().max(updatePatientBodyAllergiesMax).optional(),
+  "medications": zod.string().max(updatePatientBodyMedicationsMax).optional(),
   "discharged": zod.boolean().optional().describe('True discharges the patient, false readmits them')
 })
 
@@ -266,6 +330,13 @@ export const UpdatePatientResponse = zod.object({
   "bed": zod.string().nullish().describe('Bed or room, as the physician would look for it'),
   "admittedOn": zod.string().nullish().describe('Admission date as YYYY-MM-DD; deliberately not a timestamp'),
   "reason": zod.string().nullish().describe('Reason for admission'),
+  "ageYears": zod.number().int().nullish(),
+  "sex": zod.enum(['F', 'M', 'X']).nullish().describe('Clinically relevant for reference ranges and dosing'),
+  "weightKg": zod.number().nullish(),
+  "diagnosis": zod.string().nullish().describe('Active problem being treated, as opposed to the complaint at admission'),
+  "history": zod.string().nullish().describe('Past medical history — comorbidities, surgeries, habits'),
+  "allergies": zod.string().nullish(),
+  "medications": zod.string().nullish().describe('Home and current medication'),
   "dischargedAt": zod.coerce.date().nullish().describe('Null while still under care'),
   "noteCount": zod.number().int().optional().describe('How many notes this patient has'),
   "createdAt": zod.coerce.date(),
@@ -281,6 +352,102 @@ export const DeletePatientParams = zod.object({
 })
 
 export const DeletePatientResponse = zod.object({
+  "deleted": zod.number().int()
+})
+
+
+/**
+ * @summary The shared board of bug reports and improvement requests
+ */
+export const listFeedbackQueryStatusDefault = `all`;
+
+export const ListFeedbackQueryParams = zod.object({
+  "status": zod.enum(['open', 'in_progress', 'done', 'discarded', 'all']).default(listFeedbackQueryStatusDefault).describe('Filter by status; defaults to every item')
+})
+
+export const ListFeedbackResponseItem = zod.object({
+  "id": zod.string().uuid(),
+  "kind": zod.enum(['bug', 'improvement']),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "status": zod.enum(['open', 'in_progress', 'done', 'discarded']),
+  "authorName": zod.string().nullish(),
+  "mine": zod.boolean().describe('Whether the caller reported this one, and so may delete it'),
+  "client": zod.string().nullish().describe('Browser and device the report was filed from'),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListFeedbackResponse = zod.array(ListFeedbackResponseItem)
+
+
+/**
+ * @summary Report a bug or request an improvement
+ */
+export const createFeedbackBodyTitleMax = 120;
+
+export const createFeedbackBodyDetailMax = 4000;
+
+export const createFeedbackBodyClientMax = 300;
+
+
+
+export const CreateFeedbackBody = zod.object({
+  "kind": zod.enum(['bug', 'improvement']),
+  "title": zod.string().min(1).max(createFeedbackBodyTitleMax),
+  "detail": zod.string().max(createFeedbackBodyDetailMax).optional(),
+  "client": zod.string().max(createFeedbackBodyClientMax).optional()
+})
+
+export const CreateFeedbackResponse = zod.object({
+  "id": zod.string().uuid(),
+  "kind": zod.enum(['bug', 'improvement']),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "status": zod.enum(['open', 'in_progress', 'done', 'discarded']),
+  "authorName": zod.string().nullish(),
+  "mine": zod.boolean().describe('Whether the caller reported this one, and so may delete it'),
+  "client": zod.string().nullish().describe('Browser and device the report was filed from'),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Move an item to another status
+ */
+export const UpdateFeedbackStatusParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+export const UpdateFeedbackStatusBody = zod.object({
+  "status": zod.enum(['open', 'in_progress', 'done', 'discarded'])
+})
+
+export const UpdateFeedbackStatusResponse = zod.object({
+  "id": zod.string().uuid(),
+  "kind": zod.enum(['bug', 'improvement']),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "status": zod.enum(['open', 'in_progress', 'done', 'discarded']),
+  "authorName": zod.string().nullish(),
+  "mine": zod.boolean().describe('Whether the caller reported this one, and so may delete it'),
+  "client": zod.string().nullish().describe('Browser and device the report was filed from'),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an item you reported
+ */
+export const DeleteFeedbackParams = zod.object({
+  "id": zod.coerce.string().uuid()
+})
+
+export const DeleteFeedbackResponse = zod.object({
   "deleted": zod.number().int()
 })
 

@@ -18,4 +18,6 @@ export interface NoteInput {
   anonymize?: boolean;
   /** Standing style instructions the physician wants applied to every note */
   preferences?: string[];
+  /** Whose note this is. The server loads that patient's clinical context and gives it to the model as background for the note. */
+  patientId?: string;
 }

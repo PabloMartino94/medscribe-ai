@@ -12,6 +12,7 @@ import {
 import { z } from "zod";
 import { authed, requireAuth } from "../middlewares/auth";
 import {
+  clinicalPatch,
   deletePatientCascade,
   PATIENT_COLUMNS,
   rowToPatient,
@@ -60,7 +61,7 @@ router.post("/patients", async (req, res) => {
     res.status(400).json({ error: "Datos inválidos: se requieren las iniciales" });
     return;
   }
-  const { initials, bed, admittedOn, reason } = parsed.data;
+  const { initials, bed, admittedOn, reason, ...clinical } = parsed.data;
 
   const { data, error } = await supabase
     .from("patients")
@@ -71,6 +72,7 @@ router.post("/patients", async (req, res) => {
       // Defaults to today: a patient is almost always added on admission.
       admitted_on: admittedOn ?? new Date().toISOString().slice(0, 10),
       reason: reason?.trim() || null,
+      ...clinicalPatch(clinical),
     })
     .select(PATIENT_COLUMNS)
     .single();
@@ -126,9 +128,9 @@ router.patch("/patients/:id", async (req, res) => {
     res.status(400).json({ error: "Datos inválidos" });
     return;
   }
-  const { initials, bed, admittedOn, reason, discharged } = parsed.data;
+  const { initials, bed, admittedOn, reason, discharged, ...clinical } = parsed.data;
 
-  const patch: Record<string, unknown> = {};
+  const patch: Record<string, unknown> = clinicalPatch(clinical);
   if (initials !== undefined) patch["initials"] = initials.trim();
   if (bed !== undefined) patch["bed"] = bed.trim() || null;
   if (admittedOn !== undefined) patch["admitted_on"] = admittedOn;

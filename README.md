@@ -66,11 +66,34 @@ Se agrega un paciente, se lo selecciona, y cada nota que se graba se suma a su
 línea de tiempo. **Dar de alta** lo saca de la lista de internados sin borrar
 nada; borrarlo sí elimina sus notas y grabaciones.
 
-La identidad es deliberadamente mínima: iniciales, cama y motivo de
-internación. El límite de 16 caracteres en las iniciales está en la base
-(`check` sobre la columna), no solo en el formulario, así que un nombre
-completo no entra. La identificación formal vive en la historia clínica del
-hospital, que es donde corresponde.
+La identidad es deliberadamente mínima: iniciales y cama. El límite de 16
+caracteres en las iniciales está en la base (`check` sobre la columna), no solo
+en el formulario, así que un nombre completo no entra. La identificación formal
+vive en la historia clínica del hospital, que es donde corresponde.
+
+### La ficha, y por qué la lee la IA
+
+Cada paciente tiene además edad, sexo, peso, motivo de internación, diagnóstico
+principal, antecedentes, alergias y medicación habitual. **Esos datos viajan al
+modelo como antecedente en cada nota que se escribe sobre ese paciente**, y ese
+es el punto: nadie dicta en voz alta "paciente de 72 años, alérgico a
+penicilina" el cuarto día de internación, porque ya se sabe — y justamente por
+eso no llegaba a la nota.
+
+El prompt marca el límite con claridad, porque es donde esto se puede volver
+peligroso: la ficha es antecedente, **nunca hallazgo de hoy**. Nada de lo que
+está cargado ahí puede escribirse como examen físico, signo vital ni evolución
+del día; eso sigue saliendo únicamente de lo que se dijo en el encuentro. Si lo
+dicho contradice la ficha, para hoy vale lo dicho.
+
+Dos decisiones de diseño:
+
+- **Edad en años, no fecha de nacimiento.** Es lo que la nota efectivamente
+  dice, y una fecha de nacimiento junto con iniciales y sala identifica a una
+  persona con demasiada precisión.
+- **Las alergias se muestran siempre**, en rojo, en la barra del paciente y como
+  triángulo en la lista. Es el único dato cuyo costo de estar fuera de la vista
+  se mide en daño.
 
 Dos detalles que parecen menores y no lo son:
 
@@ -82,6 +105,54 @@ Dos detalles que parecen menores y no lo son:
   como que borra solo las de ese paciente. Para borrar varias notas de una vez
   está el selector del historial ("Seleccionar"), que manda los ids elegidos en
   un solo pedido en lugar de uno por nota.
+
+## Errores y mejoras
+
+Hay un tablero compartido dentro de la app (panel de ajustes → "Errores y
+mejoras"): cualquiera reporta un error o pide una mejora, y el ítem lleva un
+estado — pendiente, en curso, resuelto, descartado — que cualquiera puede mover
+cuando algo se aplica.
+
+Es la única tabla del sistema que **no** es privada por usuario, y es a
+propósito: un bug que ya reportó otro conviene verlo antes de reportarlo de
+nuevo. Lo que hace que eso sea seguro es que no contiene datos de pacientes, y
+el formulario lo dice. El aislamiento fino lo resuelven los permisos, no el
+código de la aplicación:
+
+- Cualquier autenticado **lee** todo el tablero y puede **cambiar el estado** de
+  cualquier ítem.
+- Nadie puede reescribir el texto de un reporte ajeno: RLS no sabe hablar de
+  columnas, así que eso lo hace un permiso de columna
+  (`grant update (status)`), no una comprobación en la ruta.
+- Cada uno borra solo lo suyo.
+- `resolved_at` lo completa un trigger, para que marcar algo como resuelto no
+  requiera permiso de escritura sobre una fecha.
+
+Se guarda también el navegador y el tamaño de pantalla de quien reporta: "se ve
+mal en mi celular" no se puede reproducir sin saber en qué celular.
+
+## En el celular
+
+La app se usa parada al lado de una cama, con una mano. Lo que eso obligó a
+cambiar, medido en un navegador real a 320, 360 y 390 px de ancho:
+
+- **Grabando, la barra inferior es solo para grabar.** Antes compartía la fila
+  con "Estructurar" y necesitaba 385 px en 328 disponibles: el botón de pausa
+  quedaba en x = -41, literalmente fuera de la pantalla. Como "Estructurar" está
+  deshabilitado mientras se graba, no se pierde nada al sacarlo de esa fila.
+- **La nota generada se trae sola a la vista.** En el teléfono se dibuja arriba
+  del cuadro de entrada, así que al terminar quedaba fuera de pantalla y la app
+  parecía no haber hecho nada.
+- **Campos de 16 px.** iOS hace zoom sobre toda la página cuando el campo
+  enfocado mide menos, que era la razón por la que el viewport tenía
+  `maximum-scale=1` y no se podía hacer zoom con los dedos. Con los campos a 16
+  px se pudo devolver el zoom.
+- `viewport-fit=cover` más `env(safe-area-inset-bottom)`, porque la barra de
+  abajo vive donde está el indicador de inicio del iPhone. La clase `pb-safe` ya
+  estaba puesta en esa barra pero nunca había sido definida: no hacía nada.
+- Los diálogos nuevos (ficha del paciente, tablero de reportes) son diálogo en
+  escritorio y panel deslizable desde abajo en el teléfono: un diálogo centrado
+  pelea con el teclado y deja su botón de cerrar lejos del pulgar.
 
 ## Privacidad y seguridad
 
@@ -149,7 +220,8 @@ supabase db push
 ```
 
 Tablas: `profiles` (nombre y preferencias de estilo, sin datos clínicos),
-`patients` (iniciales, cama, motivo y fecha de alta) y `consultations` (la nota
+`patients` (iniciales, cama, ficha clínica y fecha de alta), `feedback` (el
+tablero compartido de errores y mejoras) y `consultations` (la nota
 estructurada, su transcripción, el puntero al audio y el paciente al que
 pertenece, si pertenece a alguno). Un trigger en `auth.users` crea el perfil al
 registrarse. Borrar un paciente cascadea a sus notas, y la API borra además sus

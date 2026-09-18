@@ -128,3 +128,20 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  /*
+   * The bar at the bottom sits where the iPhone home indicator lives. Without
+   * this the last few millimetres of the record button are under it, and the
+   * swipe-up gesture wins the touch. `pb-safe` was already on that bar but was
+   * never defined, so it had been doing nothing.
+   */
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  /* Same idea for anything that slides up from the bottom edge. */
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+}

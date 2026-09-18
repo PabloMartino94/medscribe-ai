@@ -36,8 +36,12 @@ import type {
   ConsultationUpdate,
   DeletedCount,
   ErrorResponse,
+  FeedbackInput,
+  FeedbackItem,
+  FeedbackStatusUpdate,
   HealthStatus,
   ListConsultationsParams,
+  ListFeedbackParams,
   ListPatientsParams,
   NoteInput,
   Patient,
@@ -1476,6 +1480,365 @@ export const useDeletePatient = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeletePatientMutationOptions(options), queryClient);
+    }
+
+export const getListFeedbackUrl = (params?: ListFeedbackParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/feedback?${stringifiedParams}` : `/api/feedback`
+}
+
+/**
+ * @summary The shared board of bug reports and improvement requests
+ */
+export const listFeedback = async (params?: ListFeedbackParams, options?: Parameters<typeof customFetch>[1]): Promise<FeedbackItem[]> => {
+
+  return customFetch<FeedbackItem[]>(getListFeedbackUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFeedbackQueryKey = (params?: ListFeedbackParams,) => {
+    return [
+    `/api/feedback`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListFeedbackQueryOptions = <TData = Awaited<ReturnType<typeof listFeedback>>, TError = ErrorType<unknown>>(params?: ListFeedbackParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFeedback>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFeedbackQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFeedback>>> = ({ signal }) => listFeedback(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFeedback>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListFeedbackQueryResult = NonNullable<Awaited<ReturnType<typeof listFeedback>>>
+export type ListFeedbackQueryError = ErrorType<unknown>
+
+
+export function useListFeedback<TData = Awaited<ReturnType<typeof listFeedback>>, TError = ErrorType<unknown>>(
+ params: undefined |  ListFeedbackParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFeedback>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listFeedback>>,
+          TError,
+          Awaited<ReturnType<typeof listFeedback>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListFeedback<TData = Awaited<ReturnType<typeof listFeedback>>, TError = ErrorType<unknown>>(
+ params?: ListFeedbackParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFeedback>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listFeedback>>,
+          TError,
+          Awaited<ReturnType<typeof listFeedback>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListFeedback<TData = Awaited<ReturnType<typeof listFeedback>>, TError = ErrorType<unknown>>(
+ params?: ListFeedbackParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFeedback>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary The shared board of bug reports and improvement requests
+ */
+
+export function useListFeedback<TData = Awaited<ReturnType<typeof listFeedback>>, TError = ErrorType<unknown>>(
+ params?: ListFeedbackParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listFeedback>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListFeedbackQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateFeedbackUrl = () => {
+
+
+
+
+  return `/api/feedback`
+}
+
+/**
+ * @summary Report a bug or request an improvement
+ */
+export const createFeedback = async (feedbackInput: FeedbackInput, options?: Parameters<typeof customFetch>[1]): Promise<FeedbackItem> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<FeedbackItem>(getCreateFeedbackUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(feedbackInput)
+  }
+);}
+
+
+
+
+
+export const getCreateFeedbackMutationKey = () => ['createFeedback'] as const;
+
+export const getCreateFeedbackMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFeedback>>, TError,CreateFeedbackMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createFeedback>>, TError,CreateFeedbackMutationVariables, TContext> => {
+
+const mutationKey = getCreateFeedbackMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createFeedback>>, CreateFeedbackMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createFeedback(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateFeedbackMutationResult = NonNullable<Awaited<ReturnType<typeof createFeedback>>>
+    export type CreateFeedbackMutationBody = BodyType<FeedbackInput>
+    export type CreateFeedbackMutationError = ErrorType<ErrorResponse>
+    export type CreateFeedbackMutationVariables = {data: BodyType<FeedbackInput>}
+
+    /**
+ * @summary Report a bug or request an improvement
+ */
+export const useCreateFeedback = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFeedback>>, TError,CreateFeedbackMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createFeedback>>,
+        TError,
+        CreateFeedbackMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateFeedbackMutationOptions(options), queryClient);
+    }
+
+export const getUpdateFeedbackStatusUrl = (id: string,) => {
+
+
+
+
+  return `/api/feedback/${id}`
+}
+
+/**
+ * @summary Move an item to another status
+ */
+export const updateFeedbackStatus = async (id: string,
+    feedbackStatusUpdate: FeedbackStatusUpdate, options?: Parameters<typeof customFetch>[1]): Promise<FeedbackItem> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<FeedbackItem>(getUpdateFeedbackStatusUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(feedbackStatusUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateFeedbackStatusMutationKey = () => ['updateFeedbackStatus'] as const;
+
+export const getUpdateFeedbackStatusMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackStatus>>, TError,UpdateFeedbackStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackStatus>>, TError,UpdateFeedbackStatusMutationVariables, TContext> => {
+
+const mutationKey = getUpdateFeedbackStatusMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFeedbackStatus>>, UpdateFeedbackStatusMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateFeedbackStatus(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFeedbackStatusMutationResult = NonNullable<Awaited<ReturnType<typeof updateFeedbackStatus>>>
+    export type UpdateFeedbackStatusMutationBody = BodyType<FeedbackStatusUpdate>
+    export type UpdateFeedbackStatusMutationError = ErrorType<ErrorResponse>
+    export type UpdateFeedbackStatusMutationVariables = {id: string;data: BodyType<FeedbackStatusUpdate>}
+
+    /**
+ * @summary Move an item to another status
+ */
+export const useUpdateFeedbackStatus = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackStatus>>, TError,UpdateFeedbackStatusMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateFeedbackStatus>>,
+        TError,
+        UpdateFeedbackStatusMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateFeedbackStatusMutationOptions(options), queryClient);
+    }
+
+export const getDeleteFeedbackUrl = (id: string,) => {
+
+
+
+
+  return `/api/feedback/${id}`
+}
+
+/**
+ * @summary Delete an item you reported
+ */
+export const deleteFeedback = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<DeletedCount> => {
+
+  return customFetch<DeletedCount>(getDeleteFeedbackUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteFeedbackMutationKey = () => ['deleteFeedback'] as const;
+
+export const getDeleteFeedbackMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFeedback>>, TError,DeleteFeedbackMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteFeedback>>, TError,DeleteFeedbackMutationVariables, TContext> => {
+
+const mutationKey = getDeleteFeedbackMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteFeedback>>, DeleteFeedbackMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteFeedback(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteFeedbackMutationResult = NonNullable<Awaited<ReturnType<typeof deleteFeedback>>>
+
+    export type DeleteFeedbackMutationError = ErrorType<unknown>
+    export type DeleteFeedbackMutationVariables = {id: string}
+
+    /**
+ * @summary Delete an item you reported
+ */
+export const useDeleteFeedback = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFeedback>>, TError,DeleteFeedbackMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteFeedback>>,
+        TError,
+        DeleteFeedbackMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteFeedbackMutationOptions(options), queryClient);
     }
 
 export const getListConsultationsUrl = (params?: ListConsultationsParams,) => {

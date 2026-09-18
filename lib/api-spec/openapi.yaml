@@ -23,6 +23,8 @@ tags:
     description: Audio transcription
   - name: patients
     description: Inpatients under the physician's care
+  - name: feedback
+    description: Shared board of bug reports and improvement requests
   - name: consultations
     description: Stored clinical consultations
   - name: preferences
@@ -317,6 +319,94 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeletedCount"
+  /feedback:
+    get:
+      operationId: listFeedback
+      tags: [feedback]
+      summary: The shared board of bug reports and improvement requests
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by status; defaults to every item
+          schema:
+            type: string
+            enum: [open, in_progress, done, discarded, all]
+            default: all
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FeedbackItem"
+    post:
+      operationId: createFeedback
+      tags: [feedback]
+      summary: Report a bug or request an improvement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackItem"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /feedback/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      operationId: updateFeedbackStatus
+      tags: [feedback]
+      summary: Move an item to another status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackStatusUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackItem"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteFeedback
+      tags: [feedback]
+      summary: Delete an item you reported
+      responses:
+        "200":
+          description: Number of items deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedCount"
   /consultations:
     get:
       operationId: listConsultations
@@ -576,6 +666,12 @@ components:
           description: Standing style instructions the physician wants applied to every note
           items:
             type: string
+        patientId:
+          type: string
+          format: uuid
+          description: >-
+            Whose note this is. The server loads that patient's clinical context
+            and gives it to the model as background for the note.
     RefineInput:
       type: object
       required: [note, instruction]
@@ -765,6 +861,75 @@ components:
           $ref: "#/components/schemas/StructuredNote"
         patientRef:
           type: string
+    PatientSex:
+      type: string
+      nullable: true
+      enum: [F, M, X]
+      description: Clinically relevant for reference ranges and dosing
+    FeedbackKind:
+      type: string
+      enum: [bug, improvement]
+    FeedbackStatus:
+      type: string
+      enum: [open, in_progress, done, discarded]
+    FeedbackItem:
+      type: object
+      required: [id, kind, title, status, mine, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/FeedbackKind"
+        title:
+          type: string
+        detail:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/FeedbackStatus"
+        authorName:
+          type: string
+          nullable: true
+        mine:
+          type: boolean
+          description: Whether the caller reported this one, and so may delete it
+        client:
+          type: string
+          nullable: true
+          description: Browser and device the report was filed from
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    FeedbackInput:
+      type: object
+      required: [kind, title]
+      properties:
+        kind:
+          $ref: "#/components/schemas/FeedbackKind"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 120
+        detail:
+          type: string
+          maxLength: 4000
+        client:
+          type: string
+          maxLength: 300
+    FeedbackStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/FeedbackStatus"
     Patient:
       type: object
       required: [id, initials, createdAt, updatedAt]
@@ -787,6 +952,29 @@ components:
           type: string
           nullable: true
           description: Reason for admission
+        ageYears:
+          type: integer
+          nullable: true
+        sex:
+          $ref: "#/components/schemas/PatientSex"
+        weightKg:
+          type: number
+          nullable: true
+        diagnosis:
+          type: string
+          nullable: true
+          description: Active problem being treated, as opposed to the complaint at admission
+        history:
+          type: string
+          nullable: true
+          description: Past medical history — comorbidities, surgeries, habits
+        allergies:
+          type: string
+          nullable: true
+        medications:
+          type: string
+          nullable: true
+          description: Home and current medication
         dischargedAt:
           type: string
           format: date-time
@@ -818,6 +1006,28 @@ components:
         reason:
           type: string
           maxLength: 300
+        ageYears:
+          type: integer
+          minimum: 0
+          maximum: 130
+        sex:
+          $ref: "#/components/schemas/PatientSex"
+        weightKg:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 699
+        diagnosis:
+          type: string
+          maxLength: 300
+        history:
+          type: string
+          maxLength: 2000
+        allergies:
+          type: string
+          maxLength: 500
+        medications:
+          type: string
+          maxLength: 2000
     PatientUpdate:
       type: object
       properties:
@@ -834,6 +1044,28 @@ components:
         reason:
           type: string
           maxLength: 300
+        ageYears:
+          type: integer
+          minimum: 0
+          maximum: 130
+        sex:
+          $ref: "#/components/schemas/PatientSex"
+        weightKg:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 699
+        diagnosis:
+          type: string
+          maxLength: 300
+        history:
+          type: string
+          maxLength: 2000
+        allergies:
+          type: string
+          maxLength: 500
+        medications:
+          type: string
+          maxLength: 2000
         discharged:
           type: boolean
           description: True discharges the patient, false readmits them

@@ -1,10 +1,8 @@
-import { useState, type FormEvent } from 'react';
-import { BedDouble, Loader2, Plus, UserRound, X } from 'lucide-react';
+import { useState } from 'react';
+import { BedDouble, Pencil, Plus, TriangleAlert, UserRound, X } from 'lucide-react';
 import { usePatients, daysAdmitted } from '@/hooks/use-patients';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,11 +14,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { PatientFormDialog } from '@/components/patient-form';
 import { cn } from '@/lib/utils';
 import type { Patient } from '@workspace/api-client-react';
-
-/** Matches the length the database enforces, so the limit is felt while typing. */
-const MAX_INITIALS = 16;
 
 function errorMessage(err: unknown, fallback: string): string {
   const data = (err as { data?: { error?: string } } | null)?.data;
@@ -48,42 +44,20 @@ export function PatientPanel({
   onSelect: (patient: Patient | null) => void;
 }) {
   const { toast } = useToast();
-  const { patients, query, create, remove } = usePatients('active');
+  const { patients, query, remove } = usePatients('active');
 
-  const [adding, setAdding] = useState(false);
-  const [initials, setInitials] = useState('');
-  const [bed, setBed] = useState('');
-  const [reason, setReason] = useState('');
+  // Null means "new patient"; a patient means "edit that record".
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Patient | null>(null);
 
-  const resetForm = () => {
-    setInitials('');
-    setBed('');
-    setReason('');
-    setAdding(false);
+  const openNew = () => {
+    setEditing(null);
+    setFormOpen(true);
   };
 
-  const handleAdd = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!initials.trim() || create.isPending) return;
-
-    try {
-      const patient = await create.mutateAsync({
-        data: {
-          initials: initials.trim(),
-          bed: bed.trim() || undefined,
-          reason: reason.trim() || undefined,
-        },
-      });
-      resetForm();
-      onSelect(patient);
-      toast({ title: `${patient.initials} agregado` });
-    } catch (err) {
-      toast({
-        title: 'No se pudo agregar el paciente',
-        description: errorMessage(err, 'Reintentá en unos segundos'),
-        variant: 'destructive',
-      });
-    }
+  const openEdit = (patient: Patient) => {
+    setEditing(patient);
+    setFormOpen(true);
   };
 
   const handleDelete = async (patient: Patient) => {
@@ -106,67 +80,18 @@ export function PatientPanel({
         <h4 className="font-semibold text-sm tracking-tight text-muted-foreground uppercase">
           Pacientes
         </h4>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => setAdding((v) => !v)}
-        >
-          {adding ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4 mr-1" />}
-          {adding ? '' : 'Agregar'}
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={openNew}>
+          <Plus className="w-4 h-4 mr-1" />
+          Agregar
         </Button>
       </div>
 
-      {adding && (
-        <form onSubmit={handleAdd} className="space-y-2 bg-muted/30 p-3 rounded-lg border border-border/50">
-          <div className="space-y-1">
-            <Label htmlFor="p-initials" className="text-xs">
-              Iniciales
-            </Label>
-            <Input
-              id="p-initials"
-              autoFocus
-              required
-              maxLength={MAX_INITIALS}
-              value={initials}
-              onChange={(e) => setInitials(e.target.value)}
-              placeholder="J.P."
-              className="h-8 text-xs bg-background"
-            />
-            <p className="text-[11px] text-muted-foreground leading-tight">
-              Solo iniciales. El nombre completo va en la historia clínica del hospital.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="p-bed" className="text-xs">
-              Cama o habitación
-            </Label>
-            <Input
-              id="p-bed"
-              value={bed}
-              onChange={(e) => setBed(e.target.value)}
-              placeholder="302-A"
-              className="h-8 text-xs bg-background"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="p-reason" className="text-xs">
-              Motivo de internación
-            </Label>
-            <Input
-              id="p-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Dolor abdominal"
-              className="h-8 text-xs bg-background"
-            />
-          </div>
-          <Button type="submit" size="sm" className="w-full h-8 text-xs" disabled={create.isPending}>
-            {create.isPending && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-            Agregar paciente
-          </Button>
-        </form>
-      )}
+      <PatientFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        patient={editing}
+        onCreated={onSelect}
+      />
 
       {query.isLoading ? (
         <p className="text-sm text-muted-foreground">Cargando...</p>
@@ -200,10 +125,16 @@ export function PatientPanel({
                         {patient.bed}
                       </span>
                     )}
+                    {patient.allergies && (
+                      <TriangleAlert
+                        className="w-3.5 h-3.5 shrink-0 text-destructive"
+                        aria-label="Tiene alergias registradas"
+                      />
+                    )}
                   </div>
-                  {patient.reason && (
+                  {(patient.diagnosis || patient.reason) && (
                     <div className="text-xs text-muted-foreground truncate mt-0.5">
-                      {patient.reason}
+                      {patient.diagnosis || patient.reason}
                     </div>
                   )}
                   <div className="text-[11px] text-muted-foreground mt-0.5 flex gap-2">
@@ -214,37 +145,49 @@ export function PatientPanel({
                   </div>
                 </button>
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Borrar ${patient.initials}`}
-                      className="h-7 w-7 m-2 text-muted-foreground hover:text-destructive shrink-0"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>¿Borrar a {patient.initials}?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Se eliminan también sus {patient.noteCount ?? 0} notas y las grabaciones.
-                        No se puede deshacer. Si el paciente se va de alta, usá “Dar de alta” en
-                        su lugar: eso conserva todo.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => void handleDelete(patient)}
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                <div className="flex flex-col p-1 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Editar la ficha de ${patient.initials}`}
+                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                    onClick={() => openEdit(patient)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Borrar ${patient.initials}`}
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
                       >
-                        Borrar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Borrar a {patient.initials}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Se eliminan también sus {patient.noteCount ?? 0} notas y las grabaciones.
+                          No se puede deshacer. Si el paciente se va de alta, usá “Dar de alta” en
+                          su lugar: eso conserva todo.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => void handleDelete(patient)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Borrar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
             );
           })}

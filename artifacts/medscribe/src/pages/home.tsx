@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 type RefineScope = "note" | "global";
-import { Mic, Square, Loader2, Pause, Play, Settings2, Trash2, FileAudio, Stethoscope, Send, X, LogOut, CheckSquare } from "lucide-react";
+import { Mic, Square, Loader2, Pause, Play, Settings2, Trash2, FileAudio, Stethoscope, Send, X, LogOut, CheckSquare, MessageSquarePlus } from "lucide-react";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { usePreferences } from "@/hooks/use-preferences";
 import { useConsultations } from "@/hooks/use-consultations";
@@ -34,6 +34,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { CopyButton } from "@/components/copy-button";
 import { PatientPanel } from "@/components/patient-panel";
 import { PatientBar } from "@/components/patient-bar";
+import { FeedbackBoard } from "@/components/feedback-board";
+import { useFeedback } from "@/hooks/use-feedback";
 import { RecordingPlayer } from "@/components/recording-player";
 import { useTheme } from "@/components/theme-provider";
 
@@ -71,6 +73,18 @@ export default function Home() {
     currentNoteIdRef.current = currentNote?.id ?? null;
   }, [currentNote]);
 
+  // On a phone the generated note renders above the input, so finishing a
+  // recording left it off-screen: the app looked like it had done nothing
+  // until you thought to scroll up. Bring it into view when it changes.
+  const mobileNoteRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!currentNote) return;
+    const el = mobileNoteRef.current;
+    // Absent on the desktop layout, where the note has its own column.
+    if (!el || el.offsetParent === null) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [currentNote]);
+
   // Recording captured by the last transcription, attached to the next note saved.
   const pendingAudioRef = useRef<{ audioPath?: string; durationSeconds?: number }>({});
 
@@ -82,6 +96,11 @@ export default function Home() {
 
   // Bulk selection in the history. Ids rather than indexes: the list refetches
   // after every change, and a position would then point at a different note.
+  // The bug/improvement board, reachable from the settings panel on both
+  // layouts — that panel is the one thing on screen from anywhere.
+  const [boardOpen, setBoardOpen] = useState(false);
+  const { openCount: openReports } = useFeedback();
+
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -323,6 +342,9 @@ export default function Home() {
         template: selectedTemplateId as Consultation["template"],
         anonymize: autoAnonymize,
         preferences: preferences.length > 0 ? preferences : undefined,
+        // With a patient open the server adds their record as background, so
+        // the note knows the age, the comorbidities and what is being treated.
+        patientId: selectedPatient?.id,
       }
     });
   };
@@ -371,6 +393,7 @@ export default function Home() {
         template: id as Consultation["template"],
         anonymize: currentNote.anonymized,
         preferences: preferences.length > 0 ? preferences : undefined,
+        patientId: selectedPatient?.id,
       },
     });
   };
@@ -472,7 +495,7 @@ export default function Home() {
             {preferences.map((pref) => (
               <div key={pref} className="flex items-start justify-between bg-muted/30 p-2.5 rounded-md text-sm border border-border/50 gap-2">
                 <span className="flex-1 leading-snug">{pref}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0 -mt-1 -mr-1" onClick={() => void removePreference(pref)}>
+                <Button variant="ghost" size="icon" aria-label="Quitar esta preferencia" className="h-8 w-8 text-destructive shrink-0 -mt-1 -mr-1" onClick={() => void removePreference(pref)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -683,6 +706,21 @@ export default function Home() {
 
       <div className="space-y-2 pt-2 border-t">
         {email && <p className="text-xs text-muted-foreground truncate">{email}</p>}
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full h-9 text-xs justify-start"
+          onClick={() => setBoardOpen(true)}
+        >
+          <MessageSquarePlus className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+          Errores y mejoras
+          {openReports > 0 && (
+            <span className="ml-auto text-[11px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+              {openReports}
+            </span>
+          )}
+        </Button>
+
         <Button variant="outline" size="sm" className="w-full h-8 text-xs" onClick={() => void signOut()}>
           <LogOut className="w-3.5 h-3.5 mr-1.5" />
           Cerrar sesión
@@ -774,6 +812,7 @@ export default function Home() {
             />
             <Button
               size="icon"
+              aria-label="Enviar la indicación"
               className="h-[60px] w-[60px] shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-95"
               onClick={handleRefine}
               disabled={!refineInput.trim() || refineMutation.isPending}
@@ -796,6 +835,8 @@ export default function Home() {
 
   return (
     <div className="h-[100dvh] w-full flex flex-col md:flex-row overflow-hidden bg-background text-foreground selection:bg-primary/20">
+
+      <FeedbackBoard open={boardOpen} onOpenChange={setBoardOpen} />
 
       {/* LEFT COLUMN: DESKTOP ONLY */}
       <div className="hidden md:flex w-[320px] flex-col border-r bg-card/30">
@@ -824,7 +865,12 @@ export default function Home() {
           </div>
           <Drawer>
             <DrawerTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Ajustes, pacientes e historial"
+                className="h-10 w-10 relative"
+              >
                 {preferences.length > 0 && (
                   <span className="absolute -top-1 -right-1 flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
@@ -855,7 +901,7 @@ export default function Home() {
 
             {/* MOBILE OUTPUT PLACEMENT (Visible only if currentNote exists and on mobile) */}
             {currentNote && (
-              <div className="md:hidden mb-8">
+              <div className="md:hidden mb-8" ref={mobileNoteRef}>
                 {renderOutputPanel(currentNote)}
                 <div className="my-8 border-b-2 border-dashed border-border" />
               </div>
@@ -878,7 +924,7 @@ export default function Home() {
                     size="sm"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={transcribeMutation.isPending || isUploading || isRecording}
-                    className="h-8 text-xs"
+                    className="h-10 md:h-8 text-xs"
                   >
                     {isUploading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <FileAudio className="w-3.5 h-3.5 mr-1.5" />}
                     Subir Audio
@@ -904,7 +950,7 @@ export default function Home() {
                               key={t.id}
                               value={t.id}
                               disabled={regenerateMutation.isPending}
-                              className="flex-1 text-xs py-1.5"
+                              className="flex-1 text-xs py-2 min-h-[38px] md:min-h-0 md:py-1.5"
                             >
                               {t.name}
                             </TabsTrigger>
@@ -945,67 +991,77 @@ export default function Home() {
 
         {/* STICKY BOTTOM ACTION BAR */}
         <div className="absolute bottom-0 inset-x-0 border-t bg-background/95 backdrop-blur-md pb-safe p-4 md:p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] z-10">
-          <div className="max-w-3xl mx-auto flex items-center justify-center gap-3 md:gap-6">
+          {/*
+            Recording takes over the whole bar instead of sharing it.
+            Measured at 360px, the old row needed 385px of controls in 328px
+            of space and pushed the pause button to x=-41 — off the screen,
+            unreachable. Nothing is lost by swapping: "Estructurar" is disabled
+            while recording anyway, so it was 200px of dead width mid-recording.
+          */}
+          {isRecording ? (
+            <div className="max-w-3xl mx-auto flex items-center justify-center gap-6 sm:gap-10">
+              <Button
+                variant={isPaused ? "default" : "secondary"}
+                aria-label={isPaused ? "Reanudar" : "Pausar"}
+                onClick={pauseRecording}
+                className="w-16 h-16 rounded-full shadow-md shrink-0"
+              >
+                {isPaused ? <Play className="w-6 h-6" /> : <Pause className="w-6 h-6" />}
+              </Button>
 
-            {/* RECORDING CONTROLS */}
-            {!isRecording ? (
+              <div className="flex flex-col items-center justify-center min-w-[72px]">
+                <div className={cn("w-3 h-3 rounded-full mb-1", isPaused ? "bg-muted-foreground" : "bg-destructive animate-pulse")} />
+                <span className="text-xl font-mono font-medium tabular-nums">{formatTime(timerSeconds)}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {isPaused ? "en pausa" : "grabando"}
+                </span>
+              </div>
+
+              <Button
+                onClick={handleStopRecording}
+                aria-label="Terminar la grabación"
+                className="w-16 h-16 rounded-full bg-foreground text-background hover:bg-foreground/90 shadow-md shrink-0"
+              >
+                <Square className="w-6 h-6 fill-current" />
+              </Button>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto flex items-center justify-center gap-3 md:gap-6">
               <Button
                 onClick={startRecording}
+                aria-label="Grabar"
                 disabled={transcribeMutation.isPending || structureMutation.isPending}
-                className="w-16 h-16 rounded-full rounded-tr-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20 transition-all hover:scale-105 active:scale-95"
+                className="w-16 h-16 rounded-full rounded-tr-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20 transition-all hover:scale-105 active:scale-95 shrink-0"
               >
                 <Mic className="w-6 h-6" />
               </Button>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Button
-                  variant={isPaused ? "default" : "secondary"}
-                  onClick={pauseRecording}
-                  className="w-14 h-14 rounded-full shadow-md"
-                >
-                  {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
-                </Button>
 
-                <div className="flex flex-col items-center justify-center px-4 min-w-[80px]">
-                  <div className={cn("w-3 h-3 rounded-full mb-1", isPaused ? "bg-muted-foreground" : "bg-destructive animate-pulse")} />
-                  <span className="text-lg font-mono font-medium tabular-nums">{formatTime(timerSeconds)}</span>
-                </div>
+              <div className="w-px h-10 bg-border mx-1 md:mx-4 shrink-0" />
 
+              <div className="relative flex-1 max-w-[200px]">
+                {preferences.length > 0 && (
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-accent text-accent-foreground border border-border/50 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap z-10 shadow-sm font-medium">
+                    {preferences.length} pref. activa{preferences.length > 1 ? 's' : ''}
+                  </div>
+                )}
                 <Button
-                  onClick={handleStopRecording}
-                  className="w-14 h-14 rounded-full bg-foreground text-background hover:bg-foreground/90 shadow-md"
+                  size="xl"
+                  onClick={handleProcess}
+                  disabled={!text || structureMutation.isPending || isSaving}
+                  className={cn(
+                    "w-full h-16 rounded-2xl shadow-lg transition-all",
+                    text ? "bg-primary hover:bg-primary/90 text-primary-foreground hover:scale-105 active:scale-95 shadow-primary/25" : "bg-muted text-muted-foreground"
+                  )}
                 >
-                  <Square className="w-5 h-5 fill-current" />
+                  {structureMutation.isPending || isSaving ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    "Estructurar"
+                  )}
                 </Button>
               </div>
-            )}
-
-            <div className="w-px h-10 bg-border mx-2 md:mx-4" />
-
-            <div className="relative flex-1 max-w-[200px]">
-              {preferences.length > 0 && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-accent text-accent-foreground border border-border/50 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap z-10 shadow-sm font-medium">
-                  {preferences.length} pref. activa{preferences.length > 1 ? 's' : ''}
-                </div>
-              )}
-              <Button
-                size="xl"
-                onClick={handleProcess}
-                disabled={!text || structureMutation.isPending || isSaving || isRecording}
-                className={cn(
-                  "w-full h-16 rounded-2xl shadow-lg transition-all",
-                  text ? "bg-primary hover:bg-primary/90 text-primary-foreground hover:scale-105 active:scale-95 shadow-primary/25" : "bg-muted text-muted-foreground"
-                )}
-              >
-                {structureMutation.isPending || isSaving ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                ) : (
-                  "Estructurar"
-                )}
-              </Button>
             </div>
-
-          </div>
+          )}
         </div>
       </div>
 

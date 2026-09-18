@@ -5,6 +5,7 @@
  * MedScribe AI API — transcription, clinical structuring and per-physician storage of consultations. Every endpoint except /healthz and /templates requires a Supabase access token and only ever sees the caller's own rows.
  * OpenAPI spec version: 0.1.0
  */
+import type { PatientSex } from './patientSex';
 
 export interface PatientInput {
   /**
@@ -18,4 +19,23 @@ export interface PatientInput {
   admittedOn?: string;
   /** @maxLength 300 */
   reason?: string;
+  /**
+     * @minimum 0
+     * @maximum 130
+     */
+  ageYears?: number;
+  sex?: PatientSex | null;
+  /**
+     * @maximum 699
+     * @exclusiveMinimum 0
+     */
+  weightKg?: number;
+  /** @maxLength 300 */
+  diagnosis?: string;
+  /** @maxLength 2000 */
+  history?: string;
+  /** @maxLength 500 */
+  allergies?: string;
+  /** @maxLength 2000 */
+  medications?: string;
 }

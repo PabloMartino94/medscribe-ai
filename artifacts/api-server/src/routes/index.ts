@@ -6,6 +6,7 @@ import notesRouter from "./notes";
 import audioRouter from "./audio";
 import patientsRouter from "./patients";
 import consultationsRouter from "./consultations";
+import feedbackRouter from "./feedback";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(notesRouter);
 router.use(audioRouter);
 router.use(patientsRouter);
 router.use(consultationsRouter);
+router.use(feedbackRouter);
 
 export default router;
