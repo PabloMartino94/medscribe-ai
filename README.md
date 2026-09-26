@@ -158,6 +158,23 @@ código de la aplicación:
 Se guarda también el navegador y el tamaño de pantalla de quien reporta: "se ve
 mal en mi celular" no se puede reproducir sin saber en qué celular.
 
+### Aviso por mail
+
+Cada reporte nuevo dispara un mail a `FEEDBACK_NOTIFY_EMAIL` a través de Resend.
+Supabase solo manda mails de autenticación, así que llegar a una casilla exige
+un proveedor transaccional.
+
+Todo el mecanismo es opcional: sin `RESEND_API_KEY` la app se comporta
+exactamente como antes. El envío va después de que la fila está guardada y sin
+esperar su respuesta — que un proveedor de mail esté caído no puede ser la razón
+por la que un médico no puede reportar algo. Un rechazo queda en los logs con el
+motivo que devuelve Resend.
+
+Sin un dominio propio verificado, Resend solo acepta su remitente
+`onboarding@resend.dev` y solo entrega a la casilla dueña de la cuenta, que es
+justo el caso acá. El texto del reporte lo escribe una persona y termina dentro
+de un mail HTML, así que se escapa antes de armarlo.
+
 ## En el celular
 
 La app se usa parada al lado de una cama, con una mano. Lo que eso obligó a
@@ -274,9 +291,12 @@ Variables de entorno a cargar en Render (las secretas están marcadas
 | `AI_API_KEY` | Clave del proveedor elegido |
 | `SUPABASE_URL` | URL del proyecto |
 | `SUPABASE_PUBLISHABLE_KEY` | Clave publishable (anon); se expone al navegador vía `/api/config` |
+| `RESEND_API_KEY` | Opcional. Habilita el aviso por mail de cada reporte nuevo |
+| `FEEDBACK_NOTIFY_EMAIL` | Opcional. A dónde llega ese aviso |
 
 Opcionales: `AI_BASE_URL`, `AI_TRANSCRIBE_MODEL`, `AI_STRUCTURE_MODEL`,
-`CORS_ORIGINS`, `LOG_LEVEL`, `STATIC_DIR`, `FFMPEG_PATH`.
+`CORS_ORIGINS`, `LOG_LEVEL`, `STATIC_DIR`, `FFMPEG_PATH`, `FEEDBACK_NOTIFY_FROM`,
+`RESEND_API_URL`, `APP_URL`.
 
 Modelos por defecto: con `openai`, `gpt-4o-mini-transcribe` y `gpt-4o`; con
 `gemini`, `gemini-3.5-transcribe` para transcribir y `gemini-3.5-flash` para

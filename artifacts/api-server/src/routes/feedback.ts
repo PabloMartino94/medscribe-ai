@@ -10,6 +10,7 @@ import {
 } from "@workspace/api-zod";
 import { z } from "zod";
 import { authed, requireAuth } from "../middlewares/auth";
+import { notifyNewFeedback } from "../lib/notify";
 
 const router: IRouter = Router();
 
@@ -117,9 +118,22 @@ router.post("/feedback", async (req, res) => {
     return;
   }
 
-  res.status(201).json(
-    CreateFeedbackResponse.parse(rowToItem(data as unknown as FeedbackRow, user.id)),
+  const item = rowToItem(data as unknown as FeedbackRow, user.id);
+
+  // After the row is safe, and never blocking on it: a mail provider being
+  // down is not a reason a physician cannot file a report.
+  notifyNewFeedback(
+    {
+      kind: item.kind,
+      title: item.title,
+      detail: item.detail,
+      authorName: item.authorName,
+      client: item.client,
+    },
+    req.log,
   );
+
+  res.status(201).json(CreateFeedbackResponse.parse(item));
 });
 
 router.patch("/feedback/:id", async (req, res) => {
