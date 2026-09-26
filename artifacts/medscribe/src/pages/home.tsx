@@ -35,6 +35,9 @@ import { CopyButton } from "@/components/copy-button";
 import { PatientPanel } from "@/components/patient-panel";
 import { PatientBar } from "@/components/patient-bar";
 import { FeedbackBoard } from "@/components/feedback-board";
+import { NoteQueueTray } from "@/components/note-queue-tray";
+import { useNoteQueue } from "@/hooks/use-note-queue";
+import { patientLabel } from "@/hooks/use-patients";
 import { useFeedback } from "@/hooks/use-feedback";
 import { RecordingPlayer } from "@/components/recording-player";
 import { useTheme } from "@/components/theme-provider";
@@ -66,6 +69,10 @@ export default function Home() {
   const [selectedTemplateId, setSelectedTemplateId] = useLocalStorage<string>("medscribe-template", "soap");
   const [autoAnonymize, setAutoAnonymize] = useLocalStorage<boolean>("medscribe-anonymize", false);
   const [keepAudio, setKeepAudio] = useLocalStorage<boolean>("medscribe-keep-audio", true);
+  // Ward round: stopping a recording queues the whole note and frees the
+  // microphone, instead of waiting out the transcription with the text on
+  // screen to review before structuring.
+  const [roundMode, setRoundMode] = useLocalStorage<boolean>("medscribe-round-mode", true);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [currentNote, setCurrentNote] = useState<Consultation | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
@@ -87,6 +94,17 @@ export default function Home() {
 
   // Recording captured by the last transcription, attached to the next note saved.
   const pendingAudioRef = useRef<{ audioPath?: string; durationSeconds?: number }>({});
+
+  // Recordings that are becoming notes on their own while the next patient is
+  // already being recorded.
+  const queue = useNoteQueue({
+    onNoteSaved: (note) => {
+      toast({
+        title: "Nota lista",
+        description: note.title,
+      });
+    },
+  });
 
   // Server-backed history and standing preferences. With a patient selected the
   // history is that patient's timeline instead of everything.
@@ -314,13 +332,45 @@ export default function Home() {
 
   // Actions
   const handleStopRecording = async () => {
+    // Read before awaiting: stopRecording resets the timer, and the seconds are
+    // what the tray shows to tell one queued recording from another.
+    const seconds = timerSeconds;
     try {
       const blob = await stopRecording();
       const file = new File([blob], "grabacion.webm", { type: blob.type });
-      transcribeMutation.mutate({ data: { file, language: "es", store: keepAudio ? "true" : "false" } });
+
+      if (!roundMode) {
+        transcribeMutation.mutate({ data: { file, language: "es", store: keepAudio ? "true" : "false" } });
+        return;
+      }
+
+      // The patient and the template are snapshotted here, not read when the
+      // job runs: by then the physician is at the next bed with someone else
+      // selected, and the note would be filed on them.
+      queue.enqueue({
+        file,
+        seconds,
+        ...(selectedPatient ? { patientId: selectedPatient.id } : {}),
+        patientLabel: selectedPatient ? patientLabel(selectedPatient) : "",
+        templateId: selectedTemplateId,
+        templateName: templates.find((t) => t.id === selectedTemplateId)?.name ?? selectedTemplateId,
+        anonymize: autoAnonymize,
+        keepAudio,
+        preferences,
+      });
     } catch (e) {
       console.error(e);
     }
+  };
+
+  /** Bring a note the queue finished onto the screen. */
+  const openQueuedNote = (noteId: string) => {
+    const note = consultations.find((c) => c.id === noteId);
+    if (!note) {
+      toast({ title: "La nota está en el historial", description: "Actualizá si no aparece todavía." });
+      return;
+    }
+    loadHistoryNote(note);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -480,6 +530,21 @@ export default function Home() {
             id="keep-audio"
             checked={keepAudio}
             onCheckedChange={setKeepAudio}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5 pr-4">
+            <Label htmlFor="round-mode" className="cursor-pointer">Modo recorrida</Label>
+            <p className="text-[11px] text-muted-foreground leading-tight mt-1">
+              Al terminar de grabar, la nota se arma y se guarda sola mientras grabás al
+              siguiente paciente. Apagalo para revisar la transcripción antes de estructurar.
+            </p>
+          </div>
+          <Switch
+            id="round-mode"
+            checked={roundMode}
+            onCheckedChange={setRoundMode}
           />
         </div>
       </div>
@@ -894,6 +959,14 @@ export default function Home() {
         {selectedPatient && (
           <PatientBar patient={selectedPatient} onClear={() => selectPatient(null)} />
         )}
+
+        <NoteQueueTray
+          jobs={queue.jobs}
+          onOpenNote={openQueuedNote}
+          onRetry={queue.retry}
+          onDismiss={queue.dismiss}
+          onClearFinished={queue.clearFinished}
+        />
 
         {/* MAIN SCROLL AREA */}
         <ScrollArea className="flex-1 px-4 md:px-8 py-6 pb-36 md:pb-6">

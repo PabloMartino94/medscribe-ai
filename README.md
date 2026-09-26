@@ -59,6 +59,33 @@ Dos límites que conviene tener presentes:
   hay que ir consultando hasta que termine. Intentarlo como una sola llamada
   colgaba el pedido. Queda pendiente.
 
+## Modo recorrida: las notas se arman solas
+
+Por defecto, al terminar de grabar la grabación entra en una **cola** y el
+micrófono queda libre en el acto: la transcripción, la redacción y el guardado
+siguen por atrás mientras se graba al paciente siguiente. Una franja arriba
+muestra cuántas hay en proceso, cuáles quedaron listas y cuál falló, con
+reintento por ítem.
+
+Esperar la transcripción parado al lado de cada cama era la mayor parte de la
+visita. Ese era el pedido, y de ahí salen las decisiones:
+
+- **La cola es serial, no paralela.** El cuello de botella real es la cuota del
+  proveedor de IA: mandar cuatro notas a la vez es cómo una recorrida se
+  convierte en cuatro errores de cuota.
+- **El paciente y la plantilla se congelan al frenar la grabación.** Cuando el
+  trabajo corre, el médico ya está en la cama siguiente con otro paciente
+  seleccionado; leer la selección en ese momento archivaría la nota en la
+  persona equivocada.
+- **Una grabación en cola existe solo en esa pestaña.** Todavía no se subió, así
+  que cerrarla pierde el encuentro sin forma de recuperarlo: el navegador avisa
+  antes de cerrar si queda algo en vuelo.
+
+El interruptor **Modo recorrida** lo apaga. Apagado vuelve el comportamiento
+anterior: la transcripción cae en el cuadro de texto para revisarla y recién
+después se estructura. Es el modo para una consulta donde se quiere leer el
+texto antes de que la IA lo redacte.
+
 ## Pacientes internados
 
 Además de la consulta suelta, la app sigue pacientes a lo largo de varios días.
@@ -153,6 +180,11 @@ cambiar, medido en un navegador real a 320, 360 y 390 px de ancho:
 - Los diálogos nuevos (ficha del paciente, tablero de reportes) son diálogo en
   escritorio y panel deslizable desde abajo en el teléfono: un diálogo centrado
   pelea con el teclado y deja su botón de cerrar lejos del pulgar.
+- Los avisos emergentes suben por encima de la barra de acción. Abajo a la
+  derecha, que es donde caen por defecto, quedaban justo sobre el botón de
+  grabar y se comían el toque que empieza la grabación siguiente — medido, no
+  supuesto. Llevarlos arriba habría tapado el nombre del paciente y la línea de
+  alergias, así que quedaron abajo pero levantados.
 
 ## Privacidad y seguridad
 
